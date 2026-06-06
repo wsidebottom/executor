@@ -20,6 +20,39 @@ char ROMlib_rcsid_syncint[] =
 #include "rsys/m68kint.h"
 #endif
 
+#if defined (__MINGW32__) && !defined (SDL)
+typedef void *mingw_HANDLE;
+typedef void *mingw_PVOID;
+typedef unsigned long mingw_DWORD;
+typedef int mingw_BOOL;
+#define MINGW_WINAPI __attribute__((stdcall))
+#define MINGW_WT_EXECUTEDEFAULT 0
+
+typedef void (MINGW_WINAPI *mingw_WAITORTIMERCALLBACK) (mingw_PVOID,
+							unsigned char);
+
+extern mingw_BOOL MINGW_WINAPI
+CreateTimerQueueTimer (mingw_HANDLE *phNewTimer, mingw_HANDLE TimerQueue,
+		       mingw_WAITORTIMERCALLBACK Callback, mingw_PVOID Parameter,
+		       mingw_DWORD DueTime, mingw_DWORD Period,
+		       unsigned long Flags);
+extern mingw_BOOL MINGW_WINAPI
+DeleteTimerQueueTimer (mingw_HANDLE TimerQueue, mingw_HANDLE Timer,
+		       mingw_HANDLE CompletionEvent);
+
+static mingw_HANDLE mingw_sync_timer;
+static void handle_itimer_tick (int n);
+
+static void MINGW_WINAPI
+mingw_sync_timer_proc (mingw_PVOID unused, unsigned char timer_fired)
+{
+  (void) unused;
+  (void) timer_fired;
+  mingw_sync_timer = NULL;
+  handle_itimer_tick (0);
+}
+#endif
+
 #if defined (MSDOS)
 
 #include <go32.h>
@@ -586,6 +619,12 @@ syncint_init (void)
 
 #else /* !SDL */
 
+#if defined (__MINGW32__)
+
+  return TRUE;
+
+#else
+
 #if !defined(USE_BSD_SIGNALS)
 
   struct sigaction s;
@@ -605,6 +644,8 @@ syncint_init (void)
   return sigvec (SIGALRM, &s, NULL) == 0;
 #endif
 
+#endif /* !__MINGW32__ */
+
 #endif
 }
 
@@ -617,6 +658,22 @@ syncint_post (unsigned long usecs)
   //  fprintf (stderr, "P(%ul)", usecs);
   //  fflush (stderr);
   SDL_SetTimer(usecs/1000, handle_sdltimer_tick);
+#elif defined (__MINGW32__)
+  if (mingw_sync_timer)
+    {
+      DeleteTimerQueueTimer (NULL, mingw_sync_timer, (mingw_HANDLE) -1);
+      mingw_sync_timer = NULL;
+    }
+  if (usecs)
+    {
+      mingw_DWORD msecs;
+
+      msecs = usecs / 1000;
+      if (!msecs)
+	msecs = 1;
+      CreateTimerQueueTimer (&mingw_sync_timer, NULL, mingw_sync_timer_proc,
+			     NULL, msecs, 0, MINGW_WT_EXECUTEDEFAULT);
+    }
 #else
   struct itimerval t;
 

@@ -1610,27 +1610,50 @@ PUBLIC void filltables( void )
 								   (void *) 0);
 
     for (i = 0; i < (int) NELEM(tooltraptable); ++i)
-	tooltraptable[i] = toolstuff[i].orig = (void *)
-	   ((toolstuff[i].ptoc.wheretogo == _Unimplemented) ?
-	       unimpl
-	   :
-	       callback_install( (callback_handler_t)
-				   (toolstuff[i].ptoc.magic != (ULONGINT) -1 ?
-				       PascalToCCall
-				   :
-				       toolstuff[i].ptoc.wheretogo),
-						         &toolstuff[i].ptoc ));
+      {
+	syn68k_addr_t cb;
+
+	cb = ((toolstuff[i].ptoc.wheretogo == _Unimplemented) ?
+	      unimpl
+	      :
+	      callback_install( (callback_handler_t)
+				(toolstuff[i].ptoc.magic != (ULONGINT) -1 ?
+				 PascalToCCall
+				 :
+				 toolstuff[i].ptoc.wheretogo),
+				&toolstuff[i].ptoc ));
+	tooltraptable[i] = toolstuff[i].orig = (void *) cb;
+	if (toolstuff[i].ptoc.wheretogo != _Unimplemented)
+	  {
+	    fprintf (stderr, "trace: filltables tool index=0x%03x cb=0x%08lx magic=0x%08lx wheretogo=%p\n",
+		     i, (unsigned long) cb,
+		     (unsigned long) toolstuff[i].ptoc.magic,
+		     toolstuff[i].ptoc.wheretogo);
+	    fflush (stderr);
+	  }
+      }
 
     for (i = 0; i < (int) NELEM(pstuff); ++i)
-      pstuff[i].orig = ((void *)
-			((pstuff[i].ptoc.wheretogo == _Unimplemented)
-			 ? SYN68K_TO_US (unimpl)
-			 : SYN68K_TO_US (callback_install((callback_handler_t) 
-					    ((pstuff[i].ptoc.magic
-					      != (ULONGINT) -1)
-					     ? PascalToCCall
-					     : pstuff[i].ptoc.wheretogo),
-							  &pstuff[i].ptoc ))));
+      {
+	syn68k_addr_t cb;
+
+	cb = ((pstuff[i].ptoc.wheretogo == _Unimplemented)
+	      ? unimpl
+	      : callback_install((callback_handler_t)
+				 ((pstuff[i].ptoc.magic != (ULONGINT) -1)
+				  ? PascalToCCall
+				  : pstuff[i].ptoc.wheretogo),
+				 &pstuff[i].ptoc));
+	pstuff[i].orig = (void *) SYN68K_TO_US (cb);
+	if (pstuff[i].ptoc.wheretogo != _Unimplemented)
+	  {
+	    fprintf (stderr, "trace: filltables pstuff index=0x%03x cb=0x%08lx magic=0x%08lx wheretogo=%p\n",
+		     i, (unsigned long) cb,
+		     (unsigned long) pstuff[i].ptoc.magic,
+		     pstuff[i].ptoc.wheretogo);
+	    fflush (stderr);
+	  }
+      }
 
     for (i = 0; i < (int) NELEM(ostraptable); ++i) {
 	switch (i) {
@@ -1730,17 +1753,31 @@ PUBLIC void filltables( void )
 	};
 
  	if (fsindex == -1)
-	    ostraptable[i] = osstuff[i].orig = (void *)
-			   ((osstuff[i].func == _Unimplemented) ?
-			       unimpl
-			   :
-			       callback_install( osstuff[i].func,
-							     osstuff[i].func));
+	  {
+	    syn68k_addr_t cb;
+
+	    cb = ((osstuff[i].func == _Unimplemented) ?
+		  unimpl
+		  :
+		  callback_install( osstuff[i].func, osstuff[i].func));
+	    ostraptable[i] = osstuff[i].orig = (void *) cb;
+	    if (osstuff[i].func != _Unimplemented)
+	      {
+		fprintf (stderr, "trace: filltables os index=0x%03x cb=0x%08lx func=%p\n",
+			 i, (unsigned long) cb, osstuff[i].func);
+		fflush (stderr);
+	      }
+	  }
 	else {
+	    syn68k_addr_t cb;
+
 	    osstuff[i].func = (void *) _HFSRoutines;
-	    ostraptable[i] = osstuff[i].orig = (void *)
-			   callback_install( (void *) _HFSRoutines,
-						         fsroutines[fsindex] );
+	    cb = callback_install( (void *) _HFSRoutines,
+				   fsroutines[fsindex] );
+	    ostraptable[i] = osstuff[i].orig = (void *) cb;
+	    fprintf (stderr, "trace: filltables osfs index=0x%03x cb=0x%08lx fsindex=%d\n",
+		     i, (unsigned long) cb, fsindex);
+	    fflush (stderr);
 	}
     }
 }

@@ -34,7 +34,7 @@ struct statfs
   uint32 f_files;
 };
 
-#if !defined _DEV_T_
+#if !defined _DEV_T_ && !defined (__MINGW32__)
 typedef short dev_t;
 #endif
 

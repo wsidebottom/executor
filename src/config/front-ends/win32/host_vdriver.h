@@ -18,8 +18,8 @@
 #define vdriver_fixed_clut_p FALSE
 #define vdriver_grayscale_p FALSE
 
-/* We don't have a function to notify the user that the system is busy */
-#define vdriver_system_busy 0
+/* Pump the Win32 message queue while the emulator is executing. */
+extern void vdriver_system_busy (boolean_t busy_p);
 
 
 #if WIN_SUBSYSTEM == WIN_DIB
@@ -37,7 +37,6 @@ extern vdriver_dib_mode_t vdriver_dib_modes;
 #else
 #error No windows graphics subsystem defined!
 #endif /* WIN_DIB */
-
 
 
 

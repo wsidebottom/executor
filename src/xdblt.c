@@ -182,6 +182,104 @@ setup_dst_bitmap (int log2_bpp, PixMap *dst_pixmap)
   return xdblt_x_offset << 3;
 }
 
+#if defined (__MINGW32__)
+static boolean_t
+win32_xdblt_xdata_8bpp (RgnHandle rh, int mode,
+			int pat_x_rotate_count, int pat_y_rotate_count,
+			xdata_t *x, PixMap *dst)
+{
+  const INTEGER *rgn;
+  int dst_top, dst_left, row_bytes;
+  uint8 *base;
+  const uint8 *bits;
+  int pat_row_bytes, pat_height_mask, pat_width_mask;
+
+  if (x->log2_bpp != 3 || CW (dst->pixelSize) != 8)
+    return FALSE;
+
+  dst_top = CW (dst->bounds.top);
+  dst_left = CW (dst->bounds.left);
+  row_bytes = BITMAP_ROWBYTES (dst);
+  base = (uint8 *) MR (dst->baseAddr);
+
+  if (x->pat_bits)
+    {
+      bits = (const uint8 *) x->pat_bits;
+      pat_row_bytes = 1 << x->log2_row_bytes;
+      pat_height_mask = x->height_minus_1;
+    }
+  else
+    {
+      bits = (const uint8 *) &x->pat_value;
+      pat_row_bytes = 4;
+      pat_height_mask = 0;
+    }
+  pat_width_mask = pat_row_bytes - 1;
+  mode &= 7;
+
+  SETUP_SPECIAL_RGN (rh, rgn);
+
+  {
+    int y = CW (*rgn++);
+
+    while (y != RGNSTOP)
+      {
+	const INTEGER *spans = rgn;
+	const INTEGER *p = rgn;
+	int next_y;
+
+	while (*p != RGNSTOP)
+	  p += 2;
+	next_y = CW (p[1]);
+
+	for (; y < next_y; ++y)
+	  {
+	    const INTEGER *s;
+	    int pat_y = (y + pat_y_rotate_count) & pat_height_mask;
+	    uint8 *row = base + ((y - dst_top) * row_bytes);
+
+	    for (s = spans; *s != RGNSTOP; s += 2)
+	      {
+		int px;
+
+		for (px = s[0]; px < s[1]; ++px)
+		  {
+		    uint8 color = bits[(pat_y * pat_row_bytes
+					+ ((px + pat_x_rotate_count)
+					   & pat_width_mask))];
+		    uint8 *dp = row + (px - dst_left);
+
+		    if (mode & (patCopy ^ notPatCopy))
+		      color = ~color;
+
+		    switch (mode & 3)
+		      {
+		      case (patCopy & 3):
+			*dp = color;
+			break;
+		      case (patOr & 3):
+			*dp |= color;
+			break;
+		      case (patXor & 3):
+			*dp ^= color;
+			break;
+		      case (patBic & 3):
+			*dp &= color;
+			break;
+		      }
+		  }
+	      }
+	  }
+
+	rgn = p + 2;
+	y = next_y;
+      }
+  }
+
+  return TRUE;
+}
+#endif
+
 
 INTEGER phony_special_region[7] =
 { 0, 0, 0, RGNSTOP, 0, RGNSTOP, RGNSTOPX };
@@ -208,6 +306,12 @@ xdblt_xdata_norgb_norotate (RgnHandle rh, int mode,
 #endif
   
   check_bitmap (dst, CHKR_WO);
+
+#if defined (__MINGW32__)
+  if (win32_xdblt_xdata_8bpp (rh, mode, pat_x_rotate_count,
+			      pat_y_rotate_count, x, dst))
+    return TRUE;
+#endif
 
   mode_canon_p = MODE_CANON_P (mode);
   mode &= 7;
@@ -327,6 +431,12 @@ xdblt_xdata_short_narrow (RgnHandle rh, int mode,
 #endif
 
   check_bitmap (dst, CHKR_WO);
+
+#if defined (__MINGW32__)
+  if (win32_xdblt_xdata_8bpp (rh, mode, pat_x_rotate_count,
+			      pat_y_rotate_count, x, dst))
+    return TRUE;
+#endif
   
   mode_canon_p = MODE_CANON_P (mode);
   mode &= 7;
@@ -499,6 +609,12 @@ xdblt_xdata_complex (RgnHandle rh, int mode,
 #endif
 
   check_bitmap (dst, CHKR_WO);
+
+#if defined (__MINGW32__)
+  if (win32_xdblt_xdata_8bpp (rh, mode, pat_x_rotate_count,
+			      pat_y_rotate_count, x, dst))
+    return TRUE;
+#endif
   
   mode_canon_p = MODE_CANON_P (mode);
   mode &= 7;
@@ -758,6 +874,96 @@ canonicalize_pat_value_for_mode (uint32 v, int mode, uint32 fg_color,
   return v;
 }
 
+#if defined (__MINGW32__)
+static boolean_t
+win32_xdblt_pattern_8bpp (RgnHandle rh, int mode,
+			  int pat_x_rotate_count, int pat_y_rotate_count,
+			  const Pattern pattern, PixMap *dst,
+			  uint32 fg_color, uint32 bk_color)
+{
+  const INTEGER *rgn;
+  int dst_top, dst_left, row_bytes;
+  uint8 *base;
+  uint8 fg, bk;
+
+  if (ROMlib_log2[CW (dst->pixelSize)] != 3)
+    return FALSE;
+
+  dst_top = CW (dst->bounds.top);
+  dst_left = CW (dst->bounds.left);
+  row_bytes = BITMAP_ROWBYTES (dst);
+  base = (uint8 *) MR (dst->baseAddr);
+  fg = fg_color & 0xFF;
+  bk = bk_color & 0xFF;
+
+  mode &= 7;
+  SETUP_SPECIAL_RGN (rh, rgn);
+
+  {
+    int y = CW (*rgn++);
+
+    while (y != RGNSTOP)
+      {
+	const INTEGER *spans = rgn;
+	const INTEGER *p = rgn;
+	int next_y;
+
+	while (*p != RGNSTOP)
+	  p += 2;
+	next_y = CW (p[1]);
+
+	for (; y < next_y; ++y)
+	  {
+	    const INTEGER *s;
+	    uint8 *row = base + ((y - dst_top) * row_bytes);
+
+	    for (s = spans; *s != RGNSTOP; s += 2)
+	      {
+		int x;
+		int left = s[0];
+		int right = s[1];
+
+		for (x = left; x < right; ++x)
+		  {
+		    unsigned byte = ((const uint8 *) pattern)
+		      [(y + pat_y_rotate_count) & 7];
+		    boolean_t bit = (byte & (0x80 >> ((x + pat_x_rotate_count) & 7))) != 0;
+		    uint8 color;
+		    uint8 *dp;
+
+		    if (mode & (patCopy ^ notPatCopy))
+		      bit = !bit;
+		    color = bit ? fg : bk;
+		    dp = row + (x - dst_left);
+
+		    switch (mode & 3)
+		      {
+		      case (patCopy & 3):
+			*dp = color;
+			break;
+		      case (patOr & 3):
+			*dp |= color;
+			break;
+		      case (patXor & 3):
+			*dp ^= color;
+			break;
+		      case (patBic & 3):
+			*dp &= color;
+			break;
+		      }
+		  }
+	      }
+	  }
+
+	rgn = p + 2;
+	y = next_y;
+      }
+  }
+
+  return TRUE;
+}
+#endif
+
 
 boolean_t
 xdblt_pattern (RgnHandle rh, int mode,
@@ -783,6 +989,13 @@ xdblt_pattern (RgnHandle rh, int mode,
   bk_color = (bk_color & mask) * tile;
 
   mode &= 7;
+
+#if defined (__MINGW32__)
+  if (win32_xdblt_pattern_8bpp (rh, mode, pat_x_rotate_count,
+				pat_y_rotate_count, pattern, dst,
+				fg_color, bk_color))
+    return TRUE;
+#endif
 
 #if defined (VDRIVER_SUPPORTS_REAL_SCREEN_BLITS)
   /* If we can blit directly to the real screen, change the mode
@@ -881,4 +1094,3 @@ xdblt_pattern (RgnHandle rh, int mode,
 
   return update_dirty_p;
 }
-

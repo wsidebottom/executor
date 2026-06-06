@@ -391,6 +391,7 @@ PUBLIC syn68k_addr_t alinehandler(syn68k_addr_t pc, void *ignored)
     unsigned short trapno, status;
     uint32 savea0, savea1, savea2, saved1, saved2;
     unsigned short trapword;
+    static unsigned long trap_count;
     void *togoto;	/* FIXME: really a syn68k_addr_t */
 #if defined (MEMORY_WATCH)
     zone_info_t current_zone_infos[3];
@@ -408,6 +409,21 @@ PUBLIC syn68k_addr_t alinehandler(syn68k_addr_t pc, void *ignored)
 
     mostrecenttrap = trapword = READUW(pc);
     retval = pc + 2;
+    ++trap_count;
+#if defined (CYGWIN32)
+    vdriver_system_busy (TRUE);
+#endif
+    if (trap_count <= 200
+	|| (trap_count >= 1400 && trap_count <= 1800)
+	|| trapword == 0xA970
+	|| trapword == 0xA860
+	|| trapword == LOADSEGTRAPWORD
+	|| ((trap_count & 0x3FFF) == 0))
+      {
+	fprintf (stderr, "trace: aline #%lu pc=0x%08lx trap=0x%04x\n",
+		 trap_count, (unsigned long) pc, trapword);
+	fflush (stderr);
+      }
 
 #if !defined (NDEBUG)
     if (check_trap_watchpoints_p)
@@ -438,9 +454,21 @@ PUBLIC syn68k_addr_t alinehandler(syn68k_addr_t pc, void *ignored)
 	        syn68k_addr_t new_addr;
 
 		PUSHADDR(0x80014321);	/* better not use this */
+		if (trapword == LOADSEGTRAPWORD)
+		  {
+		    fprintf (stderr, "trace: aline LoadSeg callback begin a7=0x%08lx\n",
+			     (unsigned long) EM_A7);
+		    fflush (stderr);
+		  }
 		new_addr =
 		  (*(callback_handler_t)toolstuff[trapno].ptoc.wheretogo)
 							      (pc, (void *) 0);
+		if (trapword == LOADSEGTRAPWORD)
+		  {
+		    fprintf (stderr, "trace: aline LoadSeg callback complete new=0x%08lx a7=0x%08lx\n",
+			     (unsigned long) new_addr, (unsigned long) EM_A7);
+		    fflush (stderr);
+		  }
 		if (trapword == LOADSEGTRAPWORD)
 		    retval -= 6;
 		else if (trapword == MODESWITCHTRAPWORD)
@@ -535,6 +563,10 @@ PUBLIC void executor_main( void )
     CInfoPBRec hpb;
     Str255 name;
     StringPtr fName;
+    boolean_t default_browser_p = FALSE;
+
+    fprintf (stderr, "trace: executor_main init globals\n");
+    fflush (stderr);
 
     SCSIFlags = CWC (0xEC00); /* scsi+clock+xparam+mmu+adb
 				 (no fpu,aux or pwrmgr) */
@@ -585,7 +617,11 @@ PUBLIC void executor_main( void )
     SCCRd_H.p = RM(NewPtrSysClear (SCC_SIZE));
     SCCWr_H.p = RM(NewPtrSysClear (SCC_SIZE));
     
+    fprintf (stderr, "trace: executor_main setup28 begin\n");
+    fflush (stderr);
     setup28();
+    fprintf (stderr, "trace: executor_main setup28 complete\n");
+    fflush (stderr);
 
     SoundBase = RM(NewPtr(370 * sizeof(INTEGER)));
 #if 0
@@ -601,14 +637,50 @@ PUBLIC void executor_main( void )
 
     a5 = US_TO_SYN68K((LONGINT) &tmpA5);
     CurrentA5 = (Ptr) CL(a5);
+    fprintf (stderr, "trace: executor_main toolbox init begin\n");
+    fflush (stderr);
+    fprintf (stderr, "trace: InitGraf begin\n");
+    fflush (stderr);
     InitGraf((Ptr) quickbytes + sizeof(quickbytes) - 4);
+    fprintf (stderr, "trace: InitGraf complete\n");
+    fflush (stderr);
+    fprintf (stderr, "trace: executor InitFonts begin\n");
+    fflush (stderr);
     InitFonts();
+    fprintf (stderr, "trace: executor InitFonts complete\n");
+    fflush (stderr);
+    fprintf (stderr, "trace: InitCRM begin\n");
+    fflush (stderr);
     InitCRM ();
+    fprintf (stderr, "trace: InitCRM complete\n");
+    fflush (stderr);
+    fprintf (stderr, "trace: FlushEvents begin\n");
+    fflush (stderr);
     FlushEvents( everyEvent, 0 );
+    fprintf (stderr, "trace: FlushEvents complete\n");
+    fflush (stderr);
+    fprintf (stderr, "trace: InitWindows begin\n");
+    fflush (stderr);
     InitWindows();
+    fprintf (stderr, "trace: InitWindows complete\n");
+    fflush (stderr);
+    fprintf (stderr, "trace: TEInit begin\n");
+    fflush (stderr);
     TEInit();
+    fprintf (stderr, "trace: TEInit complete\n");
+    fflush (stderr);
+    fprintf (stderr, "trace: InitDialogs begin\n");
+    fflush (stderr);
     InitDialogs((ProcPtr)0);
+    fprintf (stderr, "trace: InitDialogs complete\n");
+    fflush (stderr);
+    fprintf (stderr, "trace: InitCursor begin\n");
+    fflush (stderr);
     InitCursor();
+    fprintf (stderr, "trace: InitCursor complete\n");
+    fflush (stderr);
+    fprintf (stderr, "trace: executor_main toolbox init complete\n");
+    fflush (stderr);
 
     loadtrap = 0;
 
@@ -621,14 +693,22 @@ PUBLIC void executor_main( void )
     FinderName[0] = MIN(strlen(BROWSER_NAME), sizeof(FinderName)-1);
     memcpy(FinderName+1, BROWSER_NAME, FinderName[0]);
     
+    fprintf (stderr, "trace: CountAppFiles begin\n");
+    fflush (stderr);
     CountAppFiles(&mess, &count);
     count = CW (count);
+    fprintf (stderr, "trace: CountAppFiles complete count=%d\n", count);
+    fflush (stderr);
     if (count > 0)
 	GetAppFiles(1, &thefile);
     else
 	thefile.fType = 0;
+    fprintf (stderr, "trace: app file type=0x%08lx\n", (unsigned long) CL (thefile.fType));
+    fflush (stderr);
+    fprintf (stderr, "trace: after app file type flush\n");
+    fflush (stderr);
 
-#if defined (DISPLAY_SPLASH_SCREEN)  
+#if defined (DISPLAY_SPLASH_SCREEN) && !defined (CYGWIN32)
     /* Reset the CLUT since it may have gotten changed by the splash screen. */
     gd_set_bpp (MR (MainDevice), !vdriver_grayscale_p, vdriver_fixed_clut_p,
 		vdriver_bpp);
@@ -636,8 +716,23 @@ PUBLIC void executor_main( void )
 
 #if defined (SYN68K)
 #define ALINETRAPNUMBER       0xA
+    fprintf (stderr, "trace: trap_install_handler begin\n");
+    fflush (stderr);
     trap_install_handler( ALINETRAPNUMBER, alinehandler, (void *) 0);
+    fprintf (stderr, "trace: trap_install_handler complete\n");
+    fflush (stderr);
 #endif
+    if (count == 0 && !ROMlib_default_appp)
+      {
+	default_browser_p = TRUE;
+	fprintf (stderr, "trace: launching default Browser from BootDrive=%d\n",
+		 CW (BootDrive));
+	fflush (stderr);
+	Launch (FinderName, CW (BootDrive));
+	fprintf (stderr, "trace: default Browser Launch returned\n");
+	fflush (stderr);
+	return;
+      }
     if (thefile.fType == CLC(T('A','P','P','L')))
       {
 	ClrAppFiles(1);
@@ -648,7 +743,11 @@ PUBLIC void executor_main( void )
     hpb.hFileInfo.ioVRefNum   = thefile.vRefNum;
     hpb.hFileInfo.ioFDirIndex = CWC (0);
     hpb.hFileInfo.ioDirID     = CLC (0);
+    fprintf (stderr, "trace: first PBGetCatInfo begin\n");
+    fflush (stderr);
     PBGetCatInfo(&hpb, FALSE);
+    fprintf (stderr, "trace: first PBGetCatInfo complete err=%d\n", CW (hpb.hFileInfo.ioResult));
+    fflush (stderr);
 
     if (thefile.fType == CLC(T('A','P','P','L')))
       fName = thefile.fName;
@@ -665,7 +764,7 @@ PUBLIC void executor_main( void )
 	else
 	  {
 	    if (!ROMlib_default_appp)
-	      p = NULL;
+	      p = BROWSER_NAME;
 	    else
 	      p = (char *) ROMlib_default_appp->chars;
 	  }
@@ -680,7 +779,11 @@ PUBLIC void executor_main( void )
 	    hpb.hFileInfo.ioVRefNum   = CWC (0);
 	    hpb.hFileInfo.ioFDirIndex = CWC (0);
 	    hpb.hFileInfo.ioDirID     = CLC (0);
+	    fprintf (stderr, "trace: default app PBGetCatInfo begin\n");
+	    fflush (stderr);
 	    PBGetCatInfo(&hpb, FALSE);
+	    fprintf (stderr, "trace: default app PBGetCatInfo complete err=%d\n", CW (hpb.hFileInfo.ioResult));
+	    fflush (stderr);
 
 	    {
 	      HParamBlockRec hp;
@@ -690,7 +793,11 @@ PUBLIC void executor_main( void )
 	      str255assign (fName2, fName);
 	      hp.ioParam.ioNamePtr = RM ((StringPtr) fName2);
 	      hp.volumeParam.ioVolIndex = CWC (-1);
+	      fprintf (stderr, "trace: PBHGetVInfo begin\n");
+	      fflush (stderr);
 	      PBHGetVInfo (&hp, FALSE);
+	      fprintf (stderr, "trace: PBHGetVInfo complete err=%d\n", CW (hp.ioParam.ioResult));
+	      fflush (stderr);
 	      hpb.hFileInfo.ioVRefNum   = hp.ioParam.ioVRefNum;
 	    }
 	  }
@@ -710,7 +817,15 @@ PUBLIC void executor_main( void )
     CurDirStore = hpb.hFileInfo.ioFlParID;
     wdpb.ioWDProcID = CLC (T('X','c','t','r'));
     wdpb.ioNamePtr = 0;
+    fprintf (stderr, "trace: PBOpenWD begin\n");
+    fflush (stderr);
     PBOpenWD(&wdpb, FALSE);
+    fprintf (stderr, "trace: PBOpenWD complete err=%d vref=%d\n", CW (wdpb.ioResult), CW (wdpb.ioVRefNum));
+    fflush (stderr);
     exevrefnum = CW(wdpb.ioVRefNum);
-    Launch (CurApName, exevrefnum);  
+    fprintf (stderr, "trace: Launch begin app='%.*s' vref=%d\n", fName[0], fName+1, exevrefnum);
+    fflush (stderr);
+    Launch (fName, exevrefnum);
+    fprintf (stderr, "trace: Launch returned\n");
+    fflush (stderr);
 }

@@ -834,6 +834,8 @@ P1(PUBLIC pascal trap, void, LoadSeg, INTEGER volatile, segno)
     unsigned short offbytes;
     INTEGER taboff, nentries, savenentries;
     short *ptr, *saveptr;
+    fprintf (stderr, "trace: LoadSeg begin segno=%d\n", segno);
+    fflush (stderr);
 #if defined(NEXTSTEP)
     if (ROMlib_appbit && !(ROMlib_appbit & ROMlib_whichapps))
 	ExitToShell();
@@ -841,8 +843,24 @@ P1(PUBLIC pascal trap, void, LoadSeg, INTEGER volatile, segno)
 
     ResLoad = -1;	/* CricketDraw III's behaviour suggested this */
     newcode = GetResource(TICK("CODE"), segno);
+    fprintf (stderr, "trace: LoadSeg GetResource segno=%d handle=%p\n",
+	     segno, (void *) newcode);
+    fflush (stderr);
+    if (!newcode)
+      {
+	fprintf (stderr, "trace: LoadSeg missing CODE resource segno=%d\n",
+		 segno);
+	fflush (stderr);
+	C_ExitToShell ();
+      }
     HLock(newcode);
+    fprintf (stderr, "trace: LoadSeg HLock complete host=%p\n",
+	     (void *) STARH(newcode));
+    fflush (stderr);
     taboff   = CW(((INTEGER *) STARH(newcode))[0]);
+    fprintf (stderr, "trace: LoadSeg taboff=%d nentries_raw=%d\n",
+	     taboff, CW(((INTEGER *) STARH(newcode))[1]));
+    fflush (stderr);
     if ((uint16) taboff == 0xA89F)  /* magic compressed resource signature */
       {
 	/* We are totally dead here.  We almost certainly can't use
@@ -858,6 +876,9 @@ P1(PUBLIC pascal trap, void, LoadSeg, INTEGER volatile, segno)
     savenentries = nentries = CW(((INTEGER *) STARH(newcode))[1]);
 
     saveptr = ptr = (short *) ((char *) (long) SYN68K_TO_US(a5) + taboff + Cx(CurJTOffset));
+    fprintf (stderr, "trace: LoadSeg patch start ptr=%p a5=0x%08lx CurJTOffset=%d entries=%d\n",
+	     (void *) ptr, (unsigned long) a5, Cx(CurJTOffset), nentries);
+    fflush (stderr);
     while (--nentries >= 0) {
 	if (ptr[1] != CWC(JMPLINSTR)) {
 	    offbytes = CW(*ptr);
@@ -869,8 +890,13 @@ P1(PUBLIC pascal trap, void, LoadSeg, INTEGER volatile, segno)
 	} else
 	    ptr += 4;
     }
+    fprintf (stderr, "trace: LoadSeg patch complete entries=%d\n",
+	     savenentries);
+    fflush (stderr);
     ROMlib_destroy_blocks( (syn68k_addr_t) (long) US_TO_SYN68K(saveptr), 8L * savenentries,
 			  TRUE);
+    fprintf (stderr, "trace: LoadSeg complete\n");
+    fflush (stderr);
 }
 
 #define SEGNOOFP(p) (CW(((INTEGER *)p)[-1]))

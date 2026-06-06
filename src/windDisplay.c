@@ -18,6 +18,8 @@ char ROMlib_rcsid_windDisplay[] =
 #include "rsys/cquick.h"
 #include "rsys/wind.h"
 #include "rsys/glue.h"
+#include "rsys/dirtyrect.h"
+#include "rsys/vdriver.h"
 
 P2(PUBLIC pascal trap, void, SetWTitle, WindowPtr, w, StringPtr, t)
 {
@@ -70,6 +72,9 @@ P2(PUBLIC pascal trap, void, HiliteWindow, WindowPtr, w, BOOLEAN, flag)
 {
     if (!w)
       return;
+    fprintf (stderr, "trace: HiliteWindow w=%p flag=%d hilited=%d\n",
+	     (void *) w, flag, WINDOW_HILITED_X (w));
+    fflush (stderr);
     THEPORT_SAVE_EXCURSION
       (MR (wmgr_port),
        {
@@ -144,6 +149,10 @@ P1(PUBLIC pascal trap, void, SelectWindow, WindowPtr, w)
 
 P2(PUBLIC pascal trap, void, ShowHide, WindowPtr, w, BOOLEAN, flag)
 {
+  fprintf (stderr, "trace: ShowHide w=%p flag=%d visible=%d kind=%d\n",
+	   (void *) w, flag, w ? WINDOW_VISIBLE_X (w) : 0,
+	   w ? CW (WINDOW_KIND_X (w)) : 0);
+  fflush (stderr);
   if (flag && !WINDOW_VISIBLE_X (w))
     {
       WINDOW_VISIBLE_X (w) = TRUE;
@@ -164,12 +173,28 @@ P2(PUBLIC pascal trap, void, ShowHide, WindowPtr, w, BOOLEAN, flag)
  *
  *	   if (EmptyRgn (WINDOW_STRUCT_REGION (w)))
  */
+	   fprintf (stderr, "trace: ShowHide wCalcRgns begin\n");
+	   fflush (stderr);
 	     WINDCALL(w, wCalcRgns, 0);
+	   fprintf (stderr, "trace: ShowHide wCalcRgns complete\n");
+	   fflush (stderr);
+	   fprintf (stderr, "trace: ShowHide SetClip begin\n");
+	   fflush (stderr);
 	   SetClip (WINDOW_STRUCT_REGION (w));
+	   fprintf (stderr, "trace: ShowHide ClipAbove begin\n");
+	   fflush (stderr);
 	   ClipAbove ((WindowPeek) w);
+	   fprintf (stderr, "trace: ShowHide CalcVisBehind begin\n");
+	   fflush (stderr);
 	   CalcVisBehind ((WindowPeek) w, PORT_CLIP_REGION (MR (wmgr_port)));
+	   fprintf (stderr, "trace: ShowHide wDraw begin\n");
+	   fflush (stderr);
 	   WINDCALL (w, wDraw, 0);
+	   fprintf (stderr, "trace: ShowHide wDraw complete\n");
+	   fflush (stderr);
 	   CopyRgn (WINDOW_CONT_REGION (w), WINDOW_UPDATE_REGION (w));
+	   fprintf (stderr, "trace: ShowHide CopyRgn update complete\n");
+	   fflush (stderr);
 	   
 	   aux_w = MR (*lookup_aux_win (w));
 	   w_ctab = HxP (aux_w, awCTable);
@@ -186,7 +211,13 @@ P2(PUBLIC pascal trap, void, ShowHide, WindowPtr, w, BOOLEAN, flag)
 	     }
 	   if (content_color)
 	     RGBBackColor (content_color);
+	   fprintf (stderr, "trace: ShowHide FillRgn begin\n");
+	   fflush (stderr);
 	   FillRgn (WINDOW_CONT_REGION (w), white);
+	   dirty_rect_update_screen ();
+	   vdriver_flush_display ();
+	   fprintf (stderr, "trace: ShowHide FillRgn complete\n");
+	   fflush (stderr);
 	   if (content_color)
 	     RGBBackColor (&ROMlib_white_rgb_color);
 	 });
@@ -233,6 +264,9 @@ P1(PUBLIC pascal trap, void, ShowWindow, WindowPtr, w)
 {
   WindowPeek t;
 
+  fprintf (stderr, "trace: ShowWindow w=%p visible=%d front=%p\n",
+	   (void *) w, w ? WINDOW_VISIBLE_X (w) : 0, (void *) FrontWindow ());
+  fflush (stderr);
   if (!w)
 /*-->*/	return;
   if (!WINDOW_VISIBLE_X (w))

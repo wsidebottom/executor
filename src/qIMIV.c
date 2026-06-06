@@ -16,6 +16,7 @@ char ROMlib_rcsid_qIMIV[] =
 #include "rsys/quick.h"
 #include "rsys/cquick.h"
 #include "rsys/stdbits.h"
+#include "rsys/region.h"
 #include "rsys/safe_alloca.h"
 #include "rsys/tempalloc.h"
 #include "rsys/dirtyrect.h"
@@ -398,6 +399,207 @@ copy_mask_1 (BitMap *src_bm, BitMap *mask_bm, BitMap *dst_bm,
   
 }
 
+#if defined (CYGWIN32) || defined (__MINGW32__)
+static BitMap *
+win32_resolve_copy_bitmap (BitMap *b)
+{
+  int flags;
+  PixMapHandle pmh;
+
+  if (!b)
+    return NULL;
+
+  flags = CW (b->rowBytes) & ROWBYTES_FLAG_BITS;
+  if (flags == ROWBYTES_FLAG_BITS)
+    {
+      pmh = (PixMapHandle) MR (b->baseAddr);
+      if (!pmh)
+	return NULL;
+      return (BitMap *) STARH (pmh);
+    }
+
+  return b;
+}
+
+static int
+win32_copy_bitmap_bpp (BitMap *b)
+{
+  if (IS_PIXMAP_PTR_P (b))
+    return CW (((PixMap *) b)->pixelSize);
+
+  return 1;
+}
+
+static int
+win32_copy_bitmap_row_bytes (BitMap *b)
+{
+  if (IS_PIXMAP_PTR_P (b))
+    return CW (((PixMap *) b)->rowBytes) & ROWBYTES_VALUE_BITS;
+
+  return CW (b->rowBytes) & ROWBYTES_VALUE_BITS;
+}
+
+static uint8 *
+win32_copy_bitmap_base (BitMap *b)
+{
+  if (IS_PIXMAP_PTR_P (b))
+    return (uint8 *) MR (((PixMap *) b)->baseAddr);
+
+  return (uint8 *) MR (b->baseAddr);
+}
+
+static int
+win32_get_1bpp_pixel (BitMap *b, int row_bytes, uint8 *base, int x, int y)
+{
+  int left, top;
+  uint8 byte;
+
+  left = CW (b->bounds.left);
+  top = CW (b->bounds.top);
+  byte = base[(y - top) * row_bytes + ((x - left) >> 3)];
+
+  return (byte & (0x80 >> ((x - left) & 7))) != 0;
+}
+
+static boolean_t
+win32_copy_mask_8bpp (BitMap *src_bogo_map, BitMap *mask_bogo_map,
+		      BitMap *dst_bogo_map, Rect *src_rect, Rect *mask_rect,
+		      Rect *dst_rect)
+{
+  BitMap *src_bm, *mask_bm, *dst_bm;
+  int src_bpp, mask_bpp, dst_bpp;
+  int src_row_bytes, mask_row_bytes, dst_row_bytes;
+  int src_width, src_height, mask_width, mask_height;
+  int dst_width, dst_height;
+  int dst_top, dst_left, dst_bottom, dst_right;
+  int clip_top, clip_left, clip_bottom, clip_right;
+  uint8 *src_base, *mask_base, *dst_base;
+  uint32 fg_pixel, bk_pixel;
+  RgnHandle clip_rgn;
+
+  src_bm = win32_resolve_copy_bitmap (src_bogo_map);
+  mask_bm = win32_resolve_copy_bitmap (mask_bogo_map);
+  dst_bm = win32_resolve_copy_bitmap (dst_bogo_map);
+
+  if (!src_bm || !mask_bm || !dst_bm)
+    return FALSE;
+
+  src_bpp = win32_copy_bitmap_bpp (src_bm);
+  mask_bpp = win32_copy_bitmap_bpp (mask_bm);
+  dst_bpp = win32_copy_bitmap_bpp (dst_bm);
+
+  if ((src_bpp != 1 && src_bpp != 8) || mask_bpp != 1 || dst_bpp != 8)
+    return FALSE;
+
+  src_row_bytes = win32_copy_bitmap_row_bytes (src_bm);
+  mask_row_bytes = win32_copy_bitmap_row_bytes (mask_bm);
+  dst_row_bytes = win32_copy_bitmap_row_bytes (dst_bm);
+  src_base = win32_copy_bitmap_base (src_bm);
+  mask_base = win32_copy_bitmap_base (mask_bm);
+  dst_base = win32_copy_bitmap_base (dst_bm);
+
+  if (!src_base || !mask_base || !dst_base)
+    return FALSE;
+
+  src_width = RECT_WIDTH (src_rect);
+  src_height = RECT_HEIGHT (src_rect);
+  mask_width = RECT_WIDTH (mask_rect);
+  mask_height = RECT_HEIGHT (mask_rect);
+  dst_width = RECT_WIDTH (dst_rect);
+  dst_height = RECT_HEIGHT (dst_rect);
+
+  if (src_width <= 0 || src_height <= 0 || mask_width <= 0 || mask_height <= 0
+      || dst_width <= 0 || dst_height <= 0)
+    return TRUE;
+
+  dst_top = CW (dst_rect->top);
+  dst_left = CW (dst_rect->left);
+  dst_bottom = CW (dst_rect->bottom);
+  dst_right = CW (dst_rect->right);
+
+  clip_top = MAX (dst_top, CW (dst_bm->bounds.top));
+  clip_left = MAX (dst_left, CW (dst_bm->bounds.left));
+  clip_bottom = MIN (dst_bottom, CW (dst_bm->bounds.bottom));
+  clip_right = MIN (dst_right, CW (dst_bm->bounds.right));
+
+  if (clip_bottom <= clip_top || clip_right <= clip_left)
+    return TRUE;
+
+  clip_rgn = NewRgn ();
+  {
+    Rect clip_rect;
+
+    SetRect (&clip_rect, clip_left, clip_top, clip_right, clip_bottom);
+    RectRgn (clip_rgn, &clip_rect);
+    SectRgn (clip_rgn, PORT_VIS_REGION (thePort), clip_rgn);
+    SectRgn (clip_rgn, PORT_CLIP_REGION (thePort), clip_rgn);
+  }
+
+  if (EmptyRgn (clip_rgn))
+    {
+      DisposeRgn (clip_rgn);
+      return TRUE;
+    }
+
+  clip_top = CW (RGN_BBOX (clip_rgn).top);
+  clip_left = CW (RGN_BBOX (clip_rgn).left);
+  clip_bottom = CW (RGN_BBOX (clip_rgn).bottom);
+  clip_right = CW (RGN_BBOX (clip_rgn).right);
+
+  ROMlib_fg_bk (&fg_pixel, &bk_pixel, NULL, NULL, NULL, FALSE, TRUE);
+
+  {
+    int y;
+
+    for (y = clip_top; y < clip_bottom; ++y)
+      {
+	int x;
+	int sy = CW (src_rect->top) + ((y - dst_top) * src_height) / dst_height;
+	int my = CW (mask_rect->top) + ((y - dst_top) * mask_height) / dst_height;
+	uint8 *dst_row = dst_base + ((y - CW (dst_bm->bounds.top)) * dst_row_bytes);
+
+	for (x = clip_left; x < clip_right; ++x)
+	  {
+	    int sx = (CW (src_rect->left)
+		      + ((x - dst_left) * src_width) / dst_width);
+		int mx = (CW (mask_rect->left)
+			  + ((x - dst_left) * mask_width) / dst_width);
+		uint8 pixel;
+		Point pt;
+
+		pt.h = x;
+		pt.v = y;
+		if (!PtInRgn (pt, clip_rgn))
+		  continue;
+
+		if (!win32_get_1bpp_pixel (mask_bm, mask_row_bytes, mask_base, mx, my))
+		  continue;
+
+	    if (src_bpp == 8)
+	      pixel = src_base[(sy - CW (src_bm->bounds.top)) * src_row_bytes
+			       + (sx - CW (src_bm->bounds.left))];
+	    else
+	      pixel = (win32_get_1bpp_pixel (src_bm, src_row_bytes, src_base,
+					     sx, sy)
+		       ? fg_pixel : bk_pixel) & 0xFF;
+
+	    dst_row[x - CW (dst_bm->bounds.left)] = pixel;
+	  }
+	}
+  }
+
+  dirty_rect_accrue (clip_top - CW (dst_bm->bounds.top),
+		     clip_left - CW (dst_bm->bounds.left),
+		     clip_bottom - CW (dst_bm->bounds.top),
+		     clip_right - CW (dst_bm->bounds.left));
+  dirty_rect_update_screen ();
+  vdriver_flush_display ();
+  DisposeRgn (clip_rgn);
+
+  return TRUE;
+}
+#endif
+
 P6 (PUBLIC pascal trap, void, CopyMask,		/* IMIV-24 */
     BitMap *, src_bogo_map, BitMap *, mask_bogo_map, BitMap *, dst_bogo_map,
     Rect *, src_rect, Rect *, mask_rect, Rect *, dst_rect)
@@ -407,9 +609,50 @@ P6 (PUBLIC pascal trap, void, CopyMask,		/* IMIV-24 */
   int row_bytes;
   TEMP_ALLOC_DECL (temp_mask_bits);
 
+  fprintf (stderr,
+	   "trace: CopyMask src=%p base=%p rb=%d b=(%d,%d,%d,%d) "
+	   "mask=%p base=%p rb=%d b=(%d,%d,%d,%d) "
+	   "dst=%p base=%p rb=%d b=(%d,%d,%d,%d) "
+	   "sr=(%d,%d,%d,%d) mr=(%d,%d,%d,%d) dr=(%d,%d,%d,%d)\n",
+	   (void *) src_bogo_map,
+	   src_bogo_map ? (void *) MR (src_bogo_map->baseAddr) : NULL,
+	   src_bogo_map ? CW (src_bogo_map->rowBytes) : 0,
+	   src_bogo_map ? CW (src_bogo_map->bounds.top) : 0,
+	   src_bogo_map ? CW (src_bogo_map->bounds.left) : 0,
+	   src_bogo_map ? CW (src_bogo_map->bounds.bottom) : 0,
+	   src_bogo_map ? CW (src_bogo_map->bounds.right) : 0,
+	   (void *) mask_bogo_map,
+	   mask_bogo_map ? (void *) MR (mask_bogo_map->baseAddr) : NULL,
+	   mask_bogo_map ? CW (mask_bogo_map->rowBytes) : 0,
+	   mask_bogo_map ? CW (mask_bogo_map->bounds.top) : 0,
+	   mask_bogo_map ? CW (mask_bogo_map->bounds.left) : 0,
+	   mask_bogo_map ? CW (mask_bogo_map->bounds.bottom) : 0,
+	   mask_bogo_map ? CW (mask_bogo_map->bounds.right) : 0,
+	   (void *) dst_bogo_map,
+	   dst_bogo_map ? (void *) MR (dst_bogo_map->baseAddr) : NULL,
+	   dst_bogo_map ? CW (dst_bogo_map->rowBytes) : 0,
+	   dst_bogo_map ? CW (dst_bogo_map->bounds.top) : 0,
+	   dst_bogo_map ? CW (dst_bogo_map->bounds.left) : 0,
+	   dst_bogo_map ? CW (dst_bogo_map->bounds.bottom) : 0,
+	   dst_bogo_map ? CW (dst_bogo_map->bounds.right) : 0,
+	   src_rect ? CW (src_rect->top) : 0, src_rect ? CW (src_rect->left) : 0,
+	   src_rect ? CW (src_rect->bottom) : 0, src_rect ? CW (src_rect->right) : 0,
+	   mask_rect ? CW (mask_rect->top) : 0, mask_rect ? CW (mask_rect->left) : 0,
+	   mask_rect ? CW (mask_rect->bottom) : 0, mask_rect ? CW (mask_rect->right) : 0,
+	   dst_rect ? CW (dst_rect->top) : 0, dst_rect ? CW (dst_rect->left) : 0,
+	   dst_rect ? CW (dst_rect->bottom) : 0, dst_rect ? CW (dst_rect->right) : 0);
+  fflush (stderr);
+
   if (ROMlib_text_output_disabled_p)
 /*-->*/ return;
-  
+
+#if defined (CYGWIN32) || defined (__MINGW32__)
+  if (win32_copy_mask_8bpp (src_bogo_map, mask_bogo_map, dst_bogo_map,
+			    src_rect, mask_rect, dst_rect))
+    return;
+  return;
+#endif
+
   if (EmptyRect (mask_rect))
     return;
   

@@ -441,7 +441,7 @@ xdata_for_raw_data (PixMap *target, xdata_t *x, uint32 *raw_bits,
 
 xdata_handle_t
 xdata_for_pixpat_with_space (PixPat *pixpat, PixMap *target,
-			     xdata_handle_t xh)
+				     xdata_handle_t xh)
 {
   uint32 *raw_bits;
   int height;
@@ -449,11 +449,17 @@ xdata_for_pixpat_with_space (PixPat *pixpat, PixMap *target,
   int max_byte_size, row_bytes;
   TEMP_ALLOC_DECL (raw_bits_temp_storage);
 
+  if (!xh)
+    xh = (xdata_handle_t) NewHandle (sizeof (xdata_t));
+
   LOCK_HANDLE_EXCURSION_1
     (xh,
      {
        xdata_t *x = STARH (xh);
-  
+
+       fprintf (stderr, "trace: xdata_for_pixpat xh=%p x=%p pixpat=%p target=%p\n",
+		xh, x, pixpat, target);
+
        /* Compute the dimensions of the PixPat, and allocate scratch
 	* space for the biggest possible bitmap that might be required.
 	*/
@@ -491,7 +497,10 @@ xdata_for_pattern (const Pattern pattern, PixMap *target)
        uint32 raw_bits[8 * 8];  /* Maximum possible resultant pattern size. */
        int row_bytes;
        xdata_t *x = STARH (xh);
-       
+
+       fprintf (stderr, "trace: xdata_for_pattern xh=%p x=%p target=%p\n",
+		xh, x, target);
+
        /* Compute the raw bits for this pixpat and crank out the xdata. */
        raw_bits_for_pattern (pattern, target, raw_bits, &row_bytes);
        xdata_for_raw_data (target, x, raw_bits, row_bytes, 8);

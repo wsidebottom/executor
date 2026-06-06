@@ -110,7 +110,7 @@ disk_number_to_disk_info (int number)
 }
 
 PRIVATE void
-shutdown (void)
+win_disk_shutdown (void)
 {
   VxdFinal ();
   if (hB2Win32)
@@ -144,7 +144,7 @@ init_vwin32 (void)
 	  else
 	    {
 	      VxdPatch (1);
-	      atexit (shutdown);
+	      atexit (win_disk_shutdown);
 	    }
 	  vwin32_handle = CreateFile (VWIN32_VXD_NAME,
 				      GENERIC_READ|GENERIC_WRITE, 0, NULL,

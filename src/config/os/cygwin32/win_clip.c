@@ -17,11 +17,9 @@ char ROMlib_rcsid_win_clip[] = "$Id: win_clip.c 63 2004-12-24 18:19:43Z ctm $";
 #include <rsys/scrap.h>
 #include <rsys/error.h>
 
-#include "SDL/SDL.h"
-#include "SDL_bmp.h"
-#include "SDL/SDL_syswm.h"
-
 #include "win_win.h"
+
+extern HWND Win_Window;
 
 #define FORMAT_PREFIX "Executor_0x"
 
@@ -54,16 +52,7 @@ ROMlib_executor_format (LONGINT type)
 PUBLIC HWND
 cygwin_sdlwindow (void)
 {
-  HWND retval;
-  SDL_SysWMinfo info;
-  int success; 
-
-  memset (&info, 0, sizeof info);
-  info.version.major = SDL_MAJOR_VERSION;
-  info.version.minor = SDL_MINOR_VERSION;
-  success = SDL_GetWMInfo (&info); /* NOTE: 1 is success, -1 is failure */
-  retval = (success == 1) ? info.window : NULL;
-  return retval;
+  return Win_Window;
 }
 
 PUBLIC LONGINT
@@ -234,8 +223,10 @@ we_lost_clipboard (void)
 PUBLIC void
 write_pict_as_dib_to_clipboard (void)
 {
+#if defined (SDL)
   if (clip_data)
     put_scrap_helper_dib ((LPVOID) clip_data);
+#endif
 }
 
 PUBLIC void
@@ -260,6 +251,7 @@ write_pict_as_pict_to_clipboard (void)
     }
 }
 
+#if defined (SDL)
 void
 write_surfp_to_clipboard (SDL_Surface *surfp)
 {
@@ -283,3 +275,4 @@ write_surfp_to_clipboard (SDL_Surface *surfp)
       free (bytesp);
     }
 }
+#endif

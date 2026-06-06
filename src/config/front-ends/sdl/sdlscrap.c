@@ -428,7 +428,7 @@ we_lost_clipboard(void)
 {
 #if defined(X11_SCRAP)
 /* * */
-	return ( XGetSelectionOwner(SDL_Display, XA_PRIMARY) != SDL_Window );
+	return ( XGetSelectionOwner(SDL_Display, XA_PRIMARY) != SDL_X11_Window );
 
 #elif defined(WIN_SCRAP)
 /* * */
@@ -457,7 +457,7 @@ put_scrap(int type, int srclen, char *src)
 		      XA_CUT_BUFFER0, format, 8, PropModeReplace,
 		      (unsigned char *) dst, dstlen);
       if ( we_lost_clipboard() )
-        XSetSelectionOwner(SDL_Display, XA_PRIMARY, SDL_Window, CurrentTime);
+        XSetSelectionOwner(SDL_Display, XA_PRIMARY, SDL_X11_Window, CurrentTime);
     }
 
 #elif defined(WIN_SCRAP)
@@ -501,7 +501,7 @@ get_scrap(int type, int *dstlen, char **dst)
     char *src;
 
     owner = XGetSelectionOwner(SDL_Display, XA_PRIMARY);
-    if ( (owner == None) || (owner == SDL_Window) )
+    if ( (owner == None) || (owner == SDL_X11_Window) )
       {
         owner = DefaultRootWindow(SDL_Display);
         selection = XA_CUT_BUFFER0;
@@ -511,7 +511,7 @@ get_scrap(int type, int *dstlen, char **dst)
         int selection_response = 0;
         SDL_Event event;
 
-        owner = SDL_Window;
+        owner = SDL_X11_Window;
         selection = XInternAtom(SDL_Display, "SDL_SELECTION", False);
         XConvertSelection(SDL_Display, XA_PRIMARY, format,
                                         selection, owner, CurrentTime);

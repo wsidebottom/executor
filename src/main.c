@@ -354,7 +354,7 @@ static option_t common_opts[] =
 specify that executor should run in grayscale mode even if it is \
 capable of color.",
     opt_no_arg, NULL },
-  { "netatalk", "use netatalk naming conventions for AppleDouble files",
+  { "netatalk", "use netatalk naming conventions for AppleDouble files (default)",
       opt_no_arg, NULL },
   { "afpd", "use afpd conventions for AppleDouble files (implies -netatalk)",
       opt_no_arg, NULL },
@@ -1265,6 +1265,8 @@ win_drive_to_bit (const char *drive_namep)
 A2 (PUBLIC, int, main, int, argc, char **, argv)
 {
   check_structs ();
+  fprintf (stderr, "trace: check_structs complete\n");
+  fflush (stderr);
 
   INTEGER i;
   static unsigned short jmpl_to_ResourceStub[3] =
@@ -1319,6 +1321,8 @@ A2 (PUBLIC, int, main, int, argc, char **, argv)
 #endif /* MSDOS */
 
   ROMlib_do_custom ();
+  fprintf (stderr, "trace: ROMlib_do_custom complete\n");
+  fflush (stderr);
   ROMlib_command_line = construct_command_line_string (argc, argv);
 
   if (!arch_init ())
@@ -1326,12 +1330,16 @@ A2 (PUBLIC, int, main, int, argc, char **, argv)
       fprintf (stderr, "Unable to initialize CPU information.\n");
       exit (-100);
     }
+  fprintf (stderr, "trace: arch_init complete\n");
+  fflush (stderr);
 
   if (!os_init ())
     {
       fprintf (stderr, "Unable to initialize operating system features.\n");
       exit (-101);
     }
+  fprintf (stderr, "trace: os_init complete\n");
+  fflush (stderr);
   
   {
     char *t;
@@ -1365,6 +1373,8 @@ A2 (PUBLIC, int, main, int, argc, char **, argv)
 
   setstartdir (argv[0]);
   set_appname (argv[0]);
+  fprintf (stderr, "trace: startdir/appname complete\n");
+  fflush (stderr);
 
 #define COMMANDS "commands.txt"
 
@@ -1546,8 +1556,7 @@ A2 (PUBLIC, int, main, int, argc, char **, argv)
 #endif  
 
   afpd_conventions_p = opt_val (common_db, "afpd", NULL);
-  netatalk_conventions_p = (afpd_conventions_p ||
-			    opt_val (common_db, "netatalk", NULL));
+  netatalk_conventions_p = 1;
   if (netatalk_conventions_p)
     {
       apple_double_quote_char = ':';
@@ -1635,6 +1644,8 @@ A2 (PUBLIC, int, main, int, argc, char **, argv)
     save_a7 = EM_A7;
 #if defined (SYN68K)
     /* Set up syn68k. */
+    fprintf (stderr, "trace: initialize_68k_emulator begin\n");
+    fflush (stderr);
     initialize_68k_emulator (vdriver_system_busy,
 #if defined (__CHECKER__)
 			     FALSE,
@@ -1648,6 +1659,8 @@ A2 (PUBLIC, int, main, int, argc, char **, argv)
 			     0
 #endif /* !USE_BIOS_TIMER */
 			     );
+    fprintf (stderr, "trace: initialize_68k_emulator complete\n");
+    fflush (stderr);
 #endif /* SYN68K */
 
     EM_A7 = save_a7;
@@ -1658,6 +1671,8 @@ A2 (PUBLIC, int, main, int, argc, char **, argv)
 
   /* Block virtual interrupts, until the system is fully set up. */
   int_state = block_virtual_ints ();
+  fprintf (stderr, "trace: virtual interrupts blocked\n");
+  fflush (stderr);
 
 #if defined (MSDOS)
   /* We must switch to a non-moving sbrk before calling vdriver_init,
@@ -1669,10 +1684,21 @@ A2 (PUBLIC, int, main, int, argc, char **, argv)
     switch_to_non_moving_sbrk ();
 #endif
 
+  if (graphics_p)
+    {
+      fprintf (stderr, "trace: vdriver_init begin\n");
+      fflush (stderr);
+    }
+
   if (graphics_p && !vdriver_init (0, 0, 0, FALSE, &argc, argv))
     {
       fprintf (stderr, "Unable to initialize video driver.\n");
       exit (-12);
+    }
+  if (graphics_p)
+    {
+      fprintf (stderr, "trace: vdriver_init complete\n");
+      fflush (stderr);
     }
 
 #if defined (SYN68K)
@@ -2028,9 +2054,17 @@ A2 (PUBLIC, int, main, int, argc, char **, argv)
       display_keyboard_choices ();
   }
 
+  fprintf (stderr, "trace: ROMlib_seginit begin\n");
+  fflush (stderr);
   ROMlib_seginit (argc, argv);
+  fprintf (stderr, "trace: ROMlib_seginit complete\n");
+  fflush (stderr);
   
+  fprintf (stderr, "trace: InitFonts begin\n");
+  fflush (stderr);
   InitFonts ();
+  fprintf (stderr, "trace: InitFonts complete\n");
+  fflush (stderr);
   
   
 #if !defined (NDEBUG)
@@ -2039,15 +2073,25 @@ A2 (PUBLIC, int, main, int, argc, char **, argv)
   
   /* see qColorutil.c */
   ROMlib_color_init ();
+  fprintf (stderr, "trace: ROMlib_color_init complete\n");
+  fflush (stderr);
   
   wind_color_init ();
+  fprintf (stderr, "trace: wind_color_init complete\n");
+  fflush (stderr);
   /* must be called after `ROMlib_color_init ()' */
   image_inits ();
+  fprintf (stderr, "trace: image_inits complete\n");
+  fflush (stderr);
   
   /* must be after `image_inits ()' */
   sb_ctl_init ();
+  fprintf (stderr, "trace: sb_ctl_init complete\n");
+  fflush (stderr);
   
   AE_init ();
+  fprintf (stderr, "trace: AE_init complete\n");
+  fflush (stderr);
   
   {
     INTEGER env = 0;
@@ -2071,20 +2115,30 @@ A2 (PUBLIC, int, main, int, argc, char **, argv)
   /* Set up timer interrupts.  We need to do this after everything else
    * has been initialized.
    */
+  fprintf (stderr, "trace: syncint_init begin\n");
+  fflush (stderr);
   if (!syncint_init ())
     {
       vdriver_shutdown ();
       fputs ("Fatal error:  unable to initialize timer.\n", stderr);
       exit (-11);
     }
+  fprintf (stderr, "trace: syncint_init complete\n");
+  fflush (stderr);
 
 #endif /* SYN68K */
 
   sound_init ();
+  fprintf (stderr, "trace: sound_init complete\n");
+  fflush (stderr);
   
   set_refresh_rate (ROMlib_refresh);
+  fprintf (stderr, "trace: set_refresh_rate complete\n");
+  fflush (stderr);
   
   restore_virtual_ints (int_state);
+  fprintf (stderr, "trace: restore_virtual_ints complete\n");
+  fflush (stderr);
 
   WWExist = QDExist = EXIST_NO;
 
@@ -2092,7 +2146,11 @@ A2 (PUBLIC, int, main, int, argc, char **, argv)
   complain_if_no_ghostscript ();
 #endif
   
+  fprintf (stderr, "trace: executor_main begin\n");
+  fflush (stderr);
   executor_main ();
+  fprintf (stderr, "trace: executor_main returned\n");
+  fflush (stderr);
 
   if (!ROMlib_no_windows)
     ExitToShell ();

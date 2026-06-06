@@ -30,7 +30,16 @@ P1(PUBLIC pascal trap, void, PaintRect, Rect *, r)
 
 P1(PUBLIC pascal trap, void, EraseRect, Rect *, r)
 {
+    fprintf (stderr, "trace: EraseRect r=%p (%d,%d,%d,%d) port=%p gp=%p\n",
+	     (void *) r,
+	     r ? CW (r->top) : 0, r ? CW (r->left) : 0,
+	     r ? CW (r->bottom) : 0, r ? CW (r->right) : 0,
+	     (void *) thePort,
+	     thePort ? (void *) MR (thePort->grafProcs) : NULL);
+    fflush (stderr);
     CALLRECT(erase, r);
+    fprintf (stderr, "trace: EraseRect complete\n");
+    fflush (stderr);
 }
 
 P1(PUBLIC pascal trap, void, InvertRect, Rect *, r)

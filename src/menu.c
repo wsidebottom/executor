@@ -138,9 +138,17 @@ P0(PUBLIC pascal trap, void, InitMenus)
 {
   Handle default_mcinfo;
   
+  fprintf (stderr, "trace: InitMenus entered\n");
+  fflush (stderr);
   MenuHook = MBarHook = 0;
+  fprintf (stderr, "trace: InitMenus ClearMenuBar begin\n");
+  fflush (stderr);
   ClearMenuBar ();
+  fprintf (stderr, "trace: InitMenus ClearMenuBar complete\n");
+  fflush (stderr);
   default_mcinfo = ROMlib_getrestid (TICK ("mctb"), 0);
+  fprintf (stderr, "trace: InitMenus ROMlib_getrestid complete handle=%p\n", (void *) default_mcinfo);
+  fflush (stderr);
   if (!default_mcinfo)
     {
       /* try to load 'mctb' resource 0; otherwise use default
@@ -149,6 +157,8 @@ P0(PUBLIC pascal trap, void, InitMenus)
 	MenuCInfo = (MCTableHandle) RM (NewHandle (sizeof default_menu_ctab));
 	BlockMove ((Ptr) default_menu_ctab, (Ptr) STARH (MR (MenuCInfo)),
 		   sizeof default_menu_ctab);
+	fprintf (stderr, "trace: InitMenus default mctb created\n");
+	fflush (stderr);
     }
   else
     {
@@ -161,13 +171,39 @@ P0(PUBLIC pascal trap, void, InitMenus)
 		 (Ptr) STARH (MR (MenuCInfo)),
 		 n_entries * sizeof (MCEntry));
       append_end_marker_if_necessary (MR (MenuCInfo));
+      fprintf (stderr, "trace: InitMenus resource mctb copied entries=%d\n", n_entries);
+      fflush (stderr);
     }
 
+  fprintf (stderr, "trace: InitMenus InitProcMenu begin\n");
+  fflush (stderr);
   InitProcMenu (0);	/* sets mbResID */			/* int 3 */
+  fprintf (stderr, "trace: InitMenus InitProcMenu complete MBDFHndl=%p\n", (void *) MBDFHndl);
+  fflush (stderr);
 
+  fprintf (stderr, "trace: InitMenus MBDFCALL mbHeight begin\n");
+  fflush (stderr);
   MBDFCALL(mbHeight, 0, 0L);
+  fprintf (stderr, "trace: InitMenus MBDFCALL mbHeight complete MBarHeight=%d\n", CW (MBarHeight));
+  fflush (stderr);
   
-  DrawMenuBar ();
+  if (WWExist == EXIST_YES
+#if defined (CYGWIN32) || defined (__MINGW32__)
+      && FALSE
+#endif
+      )
+    {
+      fprintf (stderr, "trace: InitMenus DrawMenuBar begin\n");
+      fflush (stderr);
+      DrawMenuBar ();
+      fprintf (stderr, "trace: InitMenus DrawMenuBar complete\n");
+      fflush (stderr);
+    }
+  else
+    {
+      fprintf (stderr, "trace: InitMenus DrawMenuBar skipped, window manager not ready\n");
+      fflush (stderr);
+    }
 }
 
 P2(PUBLIC pascal trap, MenuHandle, NewMenu, INTEGER, mid, StringPtr, str)
@@ -1651,11 +1687,26 @@ ROMlib_mbdfcall (INTEGER msg, INTEGER param1, LONGINT param2)
     LoadResource (defproc);
 
   mp = (mbdfprocp) STARH (defproc);
+  fprintf (stderr, "trace: ROMlib_mbdfcall msg=%d defproc=%p data=%p P_mbdf0=%p C_mbdf0=%p\n",
+	   msg, (void *) defproc, (void *) mp, (void *) P_mbdf0, (void *) C_mbdf0);
+  fflush (stderr);
   
-  if (mp == P_mbdf0)
-    retval = C_mbdf0 ((Hx (MENULIST, mufu) & 7), msg, param1, param2);
+  if (mp == P_mbdf0 || Hx (MENULIST, mufu) == 0
+#if defined (CYGWIN32) || defined (__MINGW32__)
+      || TRUE
+#endif
+      )
+    {
+      fprintf (stderr, "trace: ROMlib_mbdfcall native begin\n");
+      fflush (stderr);
+      retval = C_mbdf0 ((Hx (MENULIST, mufu) & 7), msg, param1, param2);
+      fprintf (stderr, "trace: ROMlib_mbdfcall native complete retval=%ld\n", (long) retval);
+      fflush (stderr);
+    }
   else
     {
+      fprintf (stderr, "trace: ROMlib_mbdfcall emulated begin\n");
+      fflush (stderr);
       ROMlib_hook (menu_mbdfnumber);
       LOCK_HANDLE_EXCURSION_1
 	(defproc,
@@ -1664,6 +1715,8 @@ ROMlib_mbdfcall (INTEGER msg, INTEGER param1, LONGINT param2)
 				   CTOP_mbdf0, (Hx (MENULIST, mufu) & 7), msg,
 				   param1, param2);
 	 });
+      fprintf (stderr, "trace: ROMlib_mbdfcall emulated complete retval=%ld\n", (long) retval);
+      fflush (stderr);
     }
 
   switch (msg)

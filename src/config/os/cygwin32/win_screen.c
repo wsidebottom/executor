@@ -11,9 +11,9 @@ char ROMlib_rcsid_win_screen[] = "$Id: win_screen.c 63 2004-12-24 18:19:43Z ctm 
 #include "rsys/common.h"
 #include "rsys/error.h"
 
-#include "syswm_vars.h"
-
 #include <windows.h>
+
+extern HWND Win_Window;
 
 PUBLIC int
 os_current_screen_width (void)
@@ -38,7 +38,7 @@ os_maximum_window_height (void)
 {
   int retval;
 
-  if (ROMlib_fullscreen_p)
+  if (0)
     retval = os_current_screen_height ();
   else
     retval = GetSystemMetrics (SM_CYFULLSCREEN);
@@ -50,7 +50,7 @@ os_maximum_window_width (void)
 {
   int retval;
 
-  if (ROMlib_fullscreen_p)
+  if (0)
     retval = os_current_screen_width ();
   else
     retval = GetSystemMetrics (SM_CXFULLSCREEN);
@@ -60,11 +60,11 @@ os_maximum_window_width (void)
 PUBLIC void
 ROMlib_recenter_window (void)
 {
-  if (!ROMlib_fullscreen_p)
+  if (1)
     {
       RECT bounds;
 
-      if (GetWindowRect (SDL_Window, &bounds))
+      if (GetWindowRect (Win_Window, &bounds))
 	{
 	  int width, height, caption_height;
 	  int x, y;
@@ -78,27 +78,27 @@ ROMlib_recenter_window (void)
 	  {
 	    LONG l;
 
-	    l = GetWindowLong (SDL_Window, GWL_STYLE);
+	    l = GetWindowLong (Win_Window, GWL_STYLE);
 	    if (!(l & WS_MINIMIZE))
 		l |= WS_MAXIMIZEBOX;
 #if 0
 	    l &= ~WS_MAXIMIZE;
 #endif
-	    SetWindowLong (SDL_Window, GWL_STYLE, l);
+	    SetWindowLong (Win_Window, GWL_STYLE, l);
 #if 0
 	    {
 	      WINDOWPLACEMENT w;
 	      
 	      memset (&w, 0, sizeof w);
 	      w.length = sizeof w;
-	      GetWindowPlacement (SDL_Window, &w);
+	      GetWindowPlacement (Win_Window, &w);
 	      w.showCmd = SW_RESTORE;
-	      SetWindowPlacement (SDL_Window, &w);
+	      SetWindowPlacement (Win_Window, &w);
 	    }
 #endif
 	  }
 #endif
-	  SetWindowPos(SDL_Window, NULL, x, y + caption_height, width, height,
+	  SetWindowPos(Win_Window, NULL, x, y + caption_height, width, height,
 		       (SWP_NOCOPYBITS | SWP_NOZORDER | SWP_SHOWWINDOW));
 	}
     }

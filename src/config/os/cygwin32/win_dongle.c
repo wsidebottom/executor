@@ -16,6 +16,17 @@ char ROMlib_rcsid_win_dongle[] = "$Id: win_dongle.c 139 2006-07-11 23:35:04Z ctm
 #include <stdlib.h>
 
 #include "win_dongle.h"
+
+#if defined (__MINGW32__)
+
+PUBLIC int
+dongle_query (uint32 *valuep)
+{
+  return -1;
+}
+
+#else
+
 #include "win_sentpro.h"
 #include "win_hasp.h"
 #include "win_dll.h"
@@ -340,3 +351,5 @@ dongle_query (uint32 *valuep)
 
   return retval;
 }
+
+#endif /* !__MINGW32__ */

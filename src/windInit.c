@@ -30,6 +30,8 @@ char ROMlib_rcsid_windInit[] =
 #include "rsys/menu.h"
 #include "rsys/resource.h"
 #include "rsys/system_error.h"
+#include "rsys/dirtyrect.h"
+#include "rsys/vdriver.h"
 
 #include "rsys/prefs.h"
 #include "rsys/flags.h"
@@ -63,18 +65,27 @@ P0 (PUBLIC pascal trap, void, InitWindows)
   PatHandle ph;
   PixPatHandle new_ph;
   RgnHandle mrgn, corners;
+  Rect mbar_rect;
   
+  fprintf (stderr, "trace: InitWindows entered\n");
+  fflush (stderr);
   AuxWinHead = RM (default_aux_win);
   SaveVisRgn = NULL;
   
   THEPORT_SAVE_EXCURSION
     (thePort,
      {
+       fprintf (stderr, "trace: InitWindows InitPort begin\n");
+       fflush (stderr);
        /* FIXME: is this a memory leak, to just call InitPort () again? */
        InitPort (MR (WMgrPort));
        InitCPort (MR (WMgrCPort));
+       fprintf (stderr, "trace: InitWindows InitPort complete\n");
+       fflush (stderr);
 
        ph = GetPattern(deskPatID);
+       fprintf (stderr, "trace: InitWindows GetPattern complete ph=%p\n", (void *) ph);
+       fflush (stderr);
        if (ph == NULL)
 	 {
 	   fprintf (stderr, "Can't open System file.\n"
@@ -89,51 +100,97 @@ P0 (PUBLIC pascal trap, void, InitWindows)
 	 DeskCPat = RM(new_ph);
        else
 	 USE_DESKCPAT_VAR &= ~USE_DESKCPAT_BIT;
+       fprintf (stderr, "trace: InitWindows InitPalettes begin\n");
+       fflush (stderr);
        InitPalettes ();
+       fprintf (stderr, "trace: InitWindows InitPalettes complete\n");
+       fflush (stderr);
+       fprintf (stderr, "trace: InitWindows InitMenus begin\n");
+       fflush (stderr);
        InitMenus ();
+       fprintf (stderr, "trace: InitWindows InitMenus complete\n");
+       fflush (stderr);
        PATASSIGN (DeskPattern, STARH(ph));
        GrayRgn = RM (NewRgn ());
+       fprintf (stderr, "trace: InitWindows GrayRgn created\n");
+       fflush (stderr);
 
        OpenRgn ();
+       fprintf (stderr, "trace: InitWindows OpenRgn complete\n");
+       fflush (stderr);
        if (ROMlib_creator && !(ROMlib_options & ROMLIB_RECT_SCREEN_BIT))
 	 FrameRoundRect (&GD_BOUNDS (MR (TheGDevice)), 16, 16);
        else
 	 FrameRect (&GD_BOUNDS (MR (TheGDevice)));
+       fprintf (stderr, "trace: InitWindows frame complete\n");
+       fflush (stderr);
        CloseRgn (MR (GrayRgn));
+       fprintf (stderr, "trace: InitWindows CloseRgn complete\n");
+       fflush (stderr);
        mrgn = NewRgn();
-       SetRectRgn(mrgn, 0, 0, CW (GD_BOUNDS (MR (TheGDevice)).right),
-		  CW(MBarHeight));
+       fprintf (stderr, "trace: InitWindows mrgn created\n");
+       fflush (stderr);
+       SetRect (&mbar_rect, 0, 0, CW (GD_BOUNDS (MR (TheGDevice)).right),
+		CW(MBarHeight));
+       SetRectRgn(mrgn, CW (mbar_rect.left), CW (mbar_rect.top),
+		  CW (mbar_rect.right), CW (mbar_rect.bottom));
+       fprintf (stderr, "trace: InitWindows SetRectRgn mrgn complete\n");
+       fflush (stderr);
        SectRgn(MR(GrayRgn), mrgn, mrgn);
+       fprintf (stderr, "trace: InitWindows SectRgn complete\n");
+       fflush (stderr);
        corners = NewRgn();
+       fprintf (stderr, "trace: InitWindows corners created\n");
+       fflush (stderr);
        SetRectRgn(corners, 0, 0, CW (GD_BOUNDS (MR (TheGDevice)).right),
 		  CW (GD_BOUNDS (MR (TheGDevice)).bottom));
+       fprintf (stderr, "trace: InitWindows SetRectRgn corners complete\n");
+       fflush (stderr);
        DiffRgn(corners, MR(GrayRgn), corners);
-       PaintRgn(corners);
+       fprintf (stderr, "trace: InitWindows DiffRgn corners complete\n");
+       fflush (stderr);
+       PaintRgn (corners);
+       fprintf (stderr, "trace: InitWindows PaintRgn corners complete\n");
+       fflush (stderr);
        CopyRgn (MR (GrayRgn), PORT_VIS_REGION (MR (wmgr_port)));
+       fprintf (stderr, "trace: InitWindows CopyRgn vis complete\n");
+       fflush (stderr);
        DiffRgn(MR(GrayRgn), mrgn, MR(GrayRgn));
-       PenPat(white);
-       PaintRgn(mrgn);
-       PenPat(black);
-       MoveTo(0, CW(MBarHeight) - 1);
-       Line (CW (GD_BOUNDS (MR (TheGDevice)).right), 0);
+       fprintf (stderr, "trace: InitWindows DiffRgn gray complete\n");
+       fflush (stderr);
+       EraseRect (&mbar_rect);
        if ((USE_DESKCPAT_VAR & USE_DESKCPAT_BIT)
 	   && PIXMAP_PIXEL_SIZE (GD_PMAP (MR (MainDevice))) > 2)
-	 FillCRgn(MR(GrayRgn), MR(DeskCPat));
+	 FillCRgn (MR (GrayRgn), MR (DeskCPat));
        else
-	 FillRgn(MR(GrayRgn), DeskPattern);
+	 FillRgn (MR (GrayRgn), DeskPattern);
+       dirty_rect_update_screen ();
+       vdriver_flush_display ();
+       fprintf (stderr, "trace: InitWindows early menu/desktop paint complete\n");
+       fflush (stderr);
        DisposeRgn(mrgn);
        DisposeRgn(corners);
+       fprintf (stderr, "trace: InitWindows dispose regions complete\n");
+       fflush (stderr);
        CopyRgn (MR (GrayRgn), PORT_CLIP_REGION (MR (wmgr_port)));
+       fprintf (stderr, "trace: InitWindows CopyRgn clip complete\n");
+       fflush (stderr);
        WindowList = NULL;
        SaveUpdate = -1;
        PaintWhite = -1;
        DeskHook = NULL;
        GhostWindow = NULL;
        PATASSIGN (DragPattern, gray);
+       fprintf (stderr, "trace: InitWindows excursion complete\n");
+       fflush (stderr);
      });
   
   /* since there is no `InitControls ()', we do this here */
+  fprintf (stderr, "trace: InitWindows ctl_color_init begin\n");
+  fflush (stderr);
   ctl_color_init ();
+  fprintf (stderr, "trace: InitWindows ctl_color_init complete\n");
+  fflush (stderr);
   
   WWExist = EXIST_YES;
   

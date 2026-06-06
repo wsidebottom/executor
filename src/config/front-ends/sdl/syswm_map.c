@@ -24,7 +24,7 @@ char ROMlib_rcsid_syswm_map[] = "$Id: syswm_map.c 63 2004-12-24 18:19:43Z ctm $"
 #if defined(__unix__)
 /* * */
 Display *SDL_Display;
-Window SDL_Window;
+Window SDL_X11_Window;
 
 static int screen_width;
 static int screen_height;
@@ -66,10 +66,10 @@ sdl_syswm_init(void)
 /* * */
 #if SDL_MAJOR_VERSION == 0 && SDL_MINOR_VERSION < 9
       SDL_Display = info.display;
-      SDL_Window = info.window;
+      SDL_X11_Window = info.window;
 #else
       SDL_Display = info.info.x11.display;
-      SDL_Window = info.info.x11.window;
+      SDL_X11_Window = info.info.x11.window;
 #endif
       {
 	Screen *screen;
@@ -166,4 +166,3 @@ sdl_syswm_event(const SDL_Event *event)
   return retval;
 }
 #endif
-

@@ -13,14 +13,17 @@ char ROMlib_rcsid_winevents[] = "$Id: winevents.c 63 2004-12-24 18:19:43Z ctm $"
 #include "ToolboxEvent.h"
 #include "SegmentLdr.h"
 #include "rsys/adb.h"
+#include "rsys/dirtyrect.h"
 #include "rsys/segment.h"
 #include "rsys/osevent.h"
 #include "rsys/keyboard.h"
-#include "rsys/param.h"
+#include "paramline.h"
 
 #include "vk_to_mkv.h"
 
 #define APPNAME "executor"
+
+extern int ROMlib_main (int argc, char **argv);
 
 /* Globals for the windows display subsystem */
 const char *Win_AppName = APPNAME;
@@ -46,6 +49,13 @@ void process_win32_events(void)
 	  DispatchMessage(&msg);
 	}
     }
+}
+
+void
+vdriver_system_busy (boolean_t busy_p)
+{
+  dirty_rect_update_screen ();
+  process_win32_events ();
 }
 
 static unsigned char w32_clover_p = 0;    /* Set by the WM_SYS* messages */
@@ -302,13 +312,11 @@ int PASCAL WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR szCmdLine, int sw)
    * running this from a read-only SMB mount. :-)
    */
   fp = freopen ("stdout.txt", "w", stdout);
-  if (!fp)
-    stdout = fopen ("stdout.txt", "w");
   setbuf (stdout, 0);
   fp = freopen ("stderr.txt", "w", stderr);
-  if (!fp)
-    stderr = fopen ("stderr.txt", "w");
   setbuf (stderr, 0);
+  fprintf (stderr, "trace: WinMain entered\n");
+  fflush (stderr);
 
   if (!hPrev) {
     /* Register a class for the main application window */
@@ -343,6 +351,8 @@ int PASCAL WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR szCmdLine, int sw)
     argv[i] = 0;
   }
 
+  fprintf (stderr, "trace: calling ROMlib_main argc=%d\n", argc);
+  fflush (stderr);
   return(ROMlib_main(argc, argv));
 }
 #endif

@@ -23,6 +23,58 @@ static char        sys_palette_p = 0;
 static HPALETTE    our_palette;
 static HPALETTE    sys_palette;
 
+static void
+win32_sync_screen_pixmaps (void)
+{
+  PixMapHandle gd_pixmap;
+  WindowPeek tw;
+
+  if (!MainDevice || !vdriver_fbuf)
+    return;
+
+  gd_pixmap = GD_PMAP (MR (MainDevice));
+  PIXMAP_SET_ROWBYTES_X (gd_pixmap, CW (vdriver_row_bytes));
+  PIXMAP_BASEADDR_X (gd_pixmap) = (Ptr) RM (vdriver_fbuf);
+
+  if (a5)
+    {
+      screenBitsX.rowBytes = CW (vdriver_row_bytes);
+      screenBitsX.baseAddr = RM ((Ptr) vdriver_fbuf);
+    }
+
+  if (WWExist == EXIST_YES)
+    {
+      for (tw = MR (WindowList); tw; tw = WINDOW_NEXT_WINDOW (tw))
+	{
+	  GrafPtr gp;
+
+	  gp = WINDOW_PORT (tw);
+	  if (CGrafPort_p (gp))
+	    {
+	      PixMapHandle window_pixmap;
+
+	      window_pixmap = CPORT_PIXMAP (gp);
+	      PIXMAP_SET_ROWBYTES_X (window_pixmap, CW (vdriver_row_bytes));
+	      PIXMAP_BASEADDR_X (window_pixmap) = (Ptr) RM (vdriver_fbuf);
+	    }
+	  else
+	    {
+	      BITMAP_SET_ROWBYTES_X (&PORT_BITS (gp), CW (vdriver_row_bytes));
+	      BITMAP_BASEADDR_X (&PORT_BITS (gp)) = RM ((Ptr) vdriver_fbuf);
+	    }
+	}
+
+      if (WMgrCPort)
+	{
+	PixMapHandle wmgr_cport_pixmap;
+
+	wmgr_cport_pixmap = CPORT_PIXMAP (MR (WMgrCPort));
+	PIXMAP_SET_ROWBYTES_X (wmgr_cport_pixmap, CW (vdriver_row_bytes));
+	PIXMAP_BASEADDR_X (wmgr_cport_pixmap) = (Ptr) RM (vdriver_fbuf);
+      }
+    }
+}
+
 
 /* DIB vdriver implementation */
 
@@ -48,6 +100,9 @@ vdriver_init (int _max_width, int _max_height, int _max_bpp,
 	      boolean_t fixed_p, int *argc, char *argv[])
 {
   HDC hdc;
+
+  fprintf (stderr, "trace: vdriver_init entered\n");
+  fflush (stderr);
 
   /* Verify the video mode parameters */
   if ( ! _max_width )
@@ -107,6 +162,8 @@ vdriver_init (int _max_width, int _max_height, int _max_bpp,
 			      NULL, NULL, Win_Instance, NULL);
   }
   ShowWindow(Win_Window, SW_SHOWDEFAULT);
+  fprintf (stderr, "trace: vdriver_init window shown\n");
+  fflush (stderr);
 
   /* Find out if we have a palettized display.
    * If sys_palette_p is set, we do active manipulation of display palette
@@ -132,8 +189,10 @@ vdriver_init (int _max_width, int _max_height, int _max_bpp,
       SetPaletteEntries(sys_palette, 0, NUM_COLORS, entries);
       SetPaletteEntries(our_palette, 0, NUM_COLORS, entries);
       Win_Focus(1);
-    }
-  ReleaseDC(hdc, Win_Window);
+  }
+  ReleaseDC(Win_Window, hdc);
+  fprintf (stderr, "trace: vdriver_init returning true\n");
+  fflush (stderr);
   return(TRUE);
 }
 
@@ -218,6 +277,14 @@ vdriver_set_mode (int width, int height, int bpp, boolean_t grayscale_p)
   screen_bmp = CreateDIBSection(hdc, binfo, DIB_RGB_COLORS,
 				(void **)(&dummy_fbuf), private_mem, 0);
   ReleaseDC(Win_Window, hdc);
+  fprintf (stderr, "trace: vdriver_set_mode map=%p dib=%p bmp=%p row_bytes=%d size=%dx%d bpp=%d\n",
+	   vdriver_fbuf, dummy_fbuf, screen_bmp, vdriver_row_bytes,
+	   vdriver_width, vdriver_height, vdriver_bpp);
+  if (screen_bmp && dummy_fbuf)
+    {
+      vdriver_fbuf = dummy_fbuf;
+      win32_sync_screen_pixmaps ();
+    }
   return(TRUE);
 }
 
@@ -405,7 +472,7 @@ Win_Focus(int on)
       SetSystemPaletteUse(hdc, SYSPAL_STATIC);
 #endif
     }
-  ReleaseDC(hdc, Win_Window);
+  ReleaseDC(Win_Window, hdc);
 }
 
 /* Called in response to WM_PAINT messages
@@ -428,4 +495,3 @@ void Win_PAINT(void)
   DeleteDC(mdc);
   EndPaint(Win_Window, &ps);
 }
-

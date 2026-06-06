@@ -44,6 +44,102 @@ uint16 srcblt_dst_selector asm ("_srcblt_dst_selector");
 /* We use this macro to avoid page faults when aligning pointers. */
 #define MIN_PAGE_SIZE 512
 
+#if defined (__MINGW32__)
+static boolean_t
+win32_srcblt_8bpp (RgnHandle rh, int mode,
+		   const blt_bitmap_t *src, const blt_bitmap_t *dst,
+		   Point *src_origin, Point *dst_origin,
+		   uint32 fg_color, uint32 bk_color)
+{
+  const INTEGER *rgn;
+  int src_row_bytes, dst_row_bytes;
+  int src_top, src_left, dst_top, dst_left;
+  int dx, dy;
+  uint8 *src_base, *dst_base;
+  uint8 fg, bk;
+  boolean_t map_fg_bk_p;
+
+  if (srcblt_log2_bpp != 3)
+    return FALSE;
+
+  src_row_bytes = CW (src->rowBytes) & ROWBYTES_VALUE_BITS;
+  dst_row_bytes = CW (dst->rowBytes) & ROWBYTES_VALUE_BITS;
+  src_base = (uint8 *) MR (src->baseAddr);
+  dst_base = (uint8 *) MR (dst->baseAddr);
+  src_top = CW (src->bounds.top);
+  src_left = CW (src->bounds.left);
+  dst_top = CW (dst->bounds.top);
+  dst_left = CW (dst->bounds.left);
+  dx = CW (src_origin->h) - CW (dst_origin->h);
+  dy = CW (src_origin->v) - CW (dst_origin->v);
+  fg = fg_color & 0xFF;
+  bk = bk_color & 0xFF;
+  map_fg_bk_p = !(fg == 0xFF && bk == 0x00);
+  mode &= 7;
+
+  SETUP_SPECIAL_RGN (rh, rgn);
+
+  {
+    int y = CW (*rgn++);
+
+    while (y != RGNSTOP)
+      {
+	const INTEGER *spans = rgn;
+	const INTEGER *p = rgn;
+	int next_y;
+
+	while (*p != RGNSTOP)
+	  p += 2;
+	next_y = CW (p[1]);
+
+	for (; y < next_y; ++y)
+	  {
+	    const INTEGER *s;
+	    uint8 *dst_row = dst_base + ((y - dst_top) * dst_row_bytes);
+	    uint8 *src_row = src_base + ((y + dy - src_top) * src_row_bytes);
+
+	    for (s = spans; *s != RGNSTOP; s += 2)
+	      {
+		int x;
+
+		for (x = s[0]; x < s[1]; ++x)
+		  {
+		    uint8 src_pixel = src_row[x + dx - src_left];
+		    uint8 *dp = dst_row + (x - dst_left);
+
+		    if (map_fg_bk_p)
+		      src_pixel = src_pixel ? fg : bk;
+		    if (mode & (srcCopy ^ notSrcCopy))
+		      src_pixel = ~src_pixel;
+
+		    switch (mode & 3)
+		      {
+		      case (srcCopy & 3):
+			*dp = src_pixel;
+			break;
+		      case (srcOr & 3):
+			*dp |= src_pixel;
+			break;
+		      case (srcXor & 3):
+			*dp ^= src_pixel;
+			break;
+		      case (srcBic & 3):
+			*dp &= src_pixel;
+			break;
+		      }
+		  }
+	      }
+	  }
+
+	rgn = p + 2;
+	y = next_y;
+      }
+  }
+
+  return TRUE;
+}
+#endif
+
 
 boolean_t
 srcblt_rgn (RgnHandle rh, int mode, int log2_bpp,
@@ -79,6 +175,12 @@ srcblt_rgn (RgnHandle rh, int mode, int log2_bpp,
     mode ^= (srcCopy ^ notSrcCopy);
 
   mode &= 7;
+
+#if defined (__MINGW32__)
+  if (win32_srcblt_8bpp (rh, mode, src, dst, src_origin, dst_origin,
+			 fg_color, bk_color))
+    return TRUE;
+#endif
 
 #if defined (VDRIVER_SUPPORTS_REAL_SCREEN_BLITS)
   cursor_maybe_changed_p = old_vis_p = FALSE;

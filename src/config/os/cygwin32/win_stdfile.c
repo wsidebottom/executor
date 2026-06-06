@@ -30,11 +30,11 @@ host_spfcommon (host_spf_reply_block *replyp, const char *prompt,
   TCHAR filename[2000];
   BOOL ret;
 
-  extern HWND SDL_Window;
+  extern HWND Win_Window;
 
   memset (&ofn, 0, sizeof ofn);
   ofn.lStructSize = sizeof ofn;
-  ofn.hwndOwner = SDL_Window;
+  ofn.hwndOwner = Win_Window;
   filename[0] = 0;
   ofn.lpstrFile = filename;
   ofn.nMaxFile = sizeof (filename);

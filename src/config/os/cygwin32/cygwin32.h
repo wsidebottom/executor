@@ -48,7 +48,8 @@ typedef struct {
 typedef unsigned short uid_t;
 typedef unsigned short gid_t;
 
-#if !defined (USE_WINDOWS_NOT_MAC_TYPEDEFS_AND_DEFINES) || !defined (_WINSOCK_H)
+#if !defined (__MINGW32__) \
+    && (!defined (USE_WINDOWS_NOT_MAC_TYPEDEFS_AND_DEFINES) || !defined (_WINSOCK_H))
 /*
   time structures
   */
@@ -61,11 +62,16 @@ struct timeval {
 
 #endif
 
+#if !defined (__MINGW32__)
 struct timezone {
   int tz_minuteswest; /* minutes west of Greenwich */
   int tz_dsttime;     /* type of dst correction */
 };
+#endif
 
+#ifdef pclose
+#undef pclose
+#endif
 #define pclose(p) (-1)
 #define MAXPATHLEN (260 - 1)
 

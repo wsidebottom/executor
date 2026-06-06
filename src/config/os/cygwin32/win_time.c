@@ -12,10 +12,11 @@ char ROMlib_rcsid_win_time[] = "$Id: win_time.c 63 2004-12-24 18:19:43Z ctm $";
 
 #include "rsys/time.h"
 
+#include <stdint.h>
 #include <windows.h>
 #include "mmsystem.h"
 
-PRIVATE uint64
+PRIVATE uint64_t
 system_time_to_micro_time (const SYSTEMTIME *timep)
 {
   FILETIME file_time;

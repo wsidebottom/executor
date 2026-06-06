@@ -78,18 +78,18 @@ MAKE_HIDDEN(DialogTPtr);
 typedef HIDDEN_DialogTPtr *DialogTHndl;
 
 typedef struct PACKED {
-  unsigned boldItm4: 1;
-  unsigned boxDrwn4: 1;
-  unsigned sound4: 2;
-  unsigned boldItm3: 1;
-  unsigned boxDrwn3: 1;
-  unsigned sound3: 2;
-  unsigned boldItm2: 1;
-  unsigned boxDrwn2: 1;
-  unsigned sound2: 2;
-  unsigned boldItm1: 1;
-  unsigned boxDrwn1: 1;
-  unsigned sound1: 2;
+  uint16 boldItm4: 1;
+  uint16 boxDrwn4: 1;
+  uint16 sound4: 2;
+  uint16 boldItm3: 1;
+  uint16 boxDrwn3: 1;
+  uint16 sound3: 2;
+  uint16 boldItm2: 1;
+  uint16 boxDrwn2: 1;
+  uint16 sound2: 2;
+  uint16 boldItm1: 1;
+  uint16 boxDrwn1: 1;
+  uint16 sound1: 2;
 } StageList;
 
 typedef struct PACKED {

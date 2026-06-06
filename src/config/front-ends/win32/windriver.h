@@ -21,8 +21,10 @@
 #define Polygon MAC_Polygon
 
 #include "rsys/common.h"
+#include "SysErr.h"
 
 #include "rsys/cquick.h"
+#include "rsys/wind.h"
 #include "rsys/refresh.h"
 #include "rsys/vdriver.h"
 #include "rsys/flags.h"

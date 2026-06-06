@@ -78,16 +78,34 @@ ROMlib_CALLRECT (GrafVerb v, Rect * rp)
   QDProcsPtr gp;
   pascal trap void (*pp) (GrafVerb, Rect *);
 
+  fprintf (stderr, "trace: ROMlib_CALLRECT v=%d rp=%p (%d,%d,%d,%d) port=%p gp=%p P_StdRect=%p\n",
+	   v, (void *) rp,
+	   rp ? CW (rp->top) : 0, rp ? CW (rp->left) : 0,
+	   rp ? CW (rp->bottom) : 0, rp ? CW (rp->right) : 0,
+	   (void *) thePort, thePort ? (void *) MR (thePort->grafProcs) : NULL,
+	   (void *) P_StdRect);
+  fflush (stderr);
   if ((gp = MR (thePort->grafProcs))
       && (pp = MR (gp->rectProc)) != P_StdRect)
     {
+      fprintf (stderr, "trace: ROMlib_CALLRECT patched pp=%p begin\n",
+	       (void *) pp);
+      fflush (stderr);
       ROMlib_hook (q_rectprocnumber);
       HOOKSAVEREGS ();
       CToPascalCall (pp, CTOP_StdRect, v, rp);
       HOOKRESTOREREGS ();
+      fprintf (stderr, "trace: ROMlib_CALLRECT patched complete\n");
+      fflush (stderr);
     }
   else
-    C_StdRect (v, rp);
+    {
+      fprintf (stderr, "trace: ROMlib_CALLRECT native begin\n");
+      fflush (stderr);
+      C_StdRect (v, rp);
+      fprintf (stderr, "trace: ROMlib_CALLRECT native complete\n");
+      fflush (stderr);
+    }
 }
 
 

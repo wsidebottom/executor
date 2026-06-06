@@ -199,6 +199,13 @@ xdblt_canon_pattern (void)
   num_rows = next_y - y;
 
   /* Call the blitter function. */
+  fprintf (stderr, "trace: xdblt_canon dispatch table=%p func=%p label0=%p label=%p row=%p y=%d rows=%d sec0=(label=%p off=%ld arg=%ld) sec1=(label=%p off=%ld arg=%ld)\n",
+	   xdblt_stub_table, xdblt_stub_table[FUNC_PTR],
+	   xdblt_stub_table[0], section[0].label,
+	   ((uint8 *) xdblt_dst_baseaddr + (y * xdblt_dst_row_bytes)),
+	   y, num_rows, section[0].label, (long) section[0].offset,
+	   (long) section[0].arg, section[1].label, (long) section[1].offset,
+	   (long) section[1].arg);
   ((void (*)(const blt_section_t *, uint8 *, long, long))
     xdblt_stub_table[FUNC_PTR]) (section,
 				 ((uint8 *) xdblt_dst_baseaddr

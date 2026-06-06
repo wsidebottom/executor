@@ -139,7 +139,7 @@ typedef f32_t native_f32_t;
 #if !defined (_romlib_float_h_2_)
 
 #if !defined (EXTERN_INLINE)
-#define EXTERN_INLINE extern inline
+#define EXTERN_INLINE static inline
 #endif
 
 #define ALWAYS_INLINE __attribute__((always_inline))

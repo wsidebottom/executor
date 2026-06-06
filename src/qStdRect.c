@@ -22,6 +22,10 @@ P2(PUBLIC pascal trap, void, StdRect, GrafVerb, v, Rect *, rp)
     RgnHandle rh, rh2;
     PAUSEDECL;
     Rect patcheduprect;
+
+    fprintf(stderr, "trace: StdRect begin v=%d rp=%p (%d,%d,%d,%d) port=%p cport=%d\n",
+	    v, rp, CW(rp->top), CW(rp->left), CW(rp->bottom), CW(rp->right),
+	    thePort, CGrafPort_p(thePort));
     
 #define MOREINSANECOMPATIBILITY
 #if defined (MOREINSANECOMPATIBILITY)
@@ -65,7 +69,12 @@ P2(PUBLIC pascal trap, void, StdRect, GrafVerb, v, Rect *, rp)
 
     PAUSERECORDING;
     rh = NewRgn();
+    fprintf(stderr, "trace: StdRect NewRgn rh=%p\n", rh);
     RectRgn(rh, rp);
+    fprintf(stderr, "trace: StdRect RectRgn rh=%p bbox=(%d,%d,%d,%d) size=%d\n",
+	    rh, CW(HxX(rh, rgnBBox.top)), CW(HxX(rh, rgnBBox.left)),
+	    CW(HxX(rh, rgnBBox.bottom)), CW(HxX(rh, rgnBBox.right)),
+	    CW(HxX(rh, rgnSize)));
     switch (v) {
     case frame:
         if (PORT_REGION_SAVE_X (thePort))
@@ -88,8 +97,11 @@ P2(PUBLIC pascal trap, void, StdRect, GrafVerb, v, Rect *, rp)
     case erase:
     case invert:
     case fill:
+        fprintf(stderr, "trace: StdRect StdRgn begin v=%d rh=%p\n", v, rh);
         StdRgn(v, rh);
+        fprintf(stderr, "trace: StdRect StdRgn complete v=%d rh=%p\n", v, rh);
     }
     DisposeRgn(rh);
+    fprintf(stderr, "trace: StdRect complete v=%d\n", v);
     RESUMERECORDING;
 }

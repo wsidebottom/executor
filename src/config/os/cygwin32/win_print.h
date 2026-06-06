@@ -21,7 +21,11 @@ extern boolean_t print_file (win_printp_t wp, const char *spool_namep,
 #define INCHES(x) ((x) * 72)
 #define MMETERS(x) ((x) * 2.835)
 
+#if defined (__MINGW32__)
+#define GSDLLAPI CALLBACK
+#else
 #define GSDLLAPI CALLBACK _export
+#endif
 
 enum
 {

@@ -381,6 +381,8 @@ blt_pixpat_to_pixmap_simple_mode (RgnHandle rh, INTEGER mode,
   int dst_top, dst_left;
   boolean_t update_dirty_p;
 
+  fprintf(stderr, "trace: blt_pixpat_simple begin rh=%p mode=%d srch=%p dsth=%p port=%p\n",
+	  rh, mode, srch, dsth, thePort);
   LOCK_HANDLE_EXCURSION_2
     (srch, dsth,
      {
@@ -392,6 +394,10 @@ blt_pixpat_to_pixmap_simple_mode (RgnHandle rh, INTEGER mode,
        
        dst_top  = CW (dst->bounds.top);
        dst_left = CW (dst->bounds.left);
+       fprintf(stderr, "trace: blt_pixpat_simple locked src=%p patType=%d dst=%p base=%p rowBytes=0x%04x bpp=%d bounds=(%d,%d,%d,%d) screen=%d\n",
+	       src, CW(src->patType), dst, MR(dst->baseAddr), CW(dst->rowBytes),
+	       CW(dst->pixelSize), CW(dst->bounds.top), CW(dst->bounds.left),
+	       CW(dst->bounds.bottom), CW(dst->bounds.right), screen_dst_p);
 
        if (src->patType == CWC (pixpat_old_style_pattern))
 	 {
@@ -405,9 +411,13 @@ blt_pixpat_to_pixmap_simple_mode (RgnHandle rh, INTEGER mode,
 	   canonical_from_bogo_color (PORT_BK_COLOR (the_port), dst_rgb_spec,
 				      &bk_color, NULL);
 	   
+	   fprintf(stderr, "trace: blt_pixpat_simple xdblt_pattern old begin fg=0x%08lx bk=0x%08lx\n",
+		   (unsigned long) fg_color, (unsigned long) bk_color);
 	   update_dirty_p = xdblt_pattern (rh, mode, -dst_left, -dst_top,
 					   src->pat1Data, dst, fg_color,
 					   bk_color);
+	   fprintf(stderr, "trace: blt_pixpat_simple xdblt_pattern old complete update=%d\n",
+		   update_dirty_p);
 	 }
        else
 	 {
@@ -446,11 +456,13 @@ blt_pixpat_to_pixmap_simple_mode (RgnHandle rh, INTEGER mode,
 		       HxX (xh, raw_pat_bits_mem) = NULL;
 		     }
 		 }
-	       else if (handle_size_wrong_p)
-		 {
-		   SetHandleSize ((Handle) xh, sizeof (xdata_t));
-		   warning_unexpected ("invalid xdata size; appl juked xdata maybe");
-		 }
+		       else if (handle_size_wrong_p)
+			 {
+			   warning_unexpected ("invalid xdata size; appl juked xdata maybe");
+			   xh = (xdata_handle_t) NewHandle (sizeof (xdata_t));
+			   HxX (xh, raw_pat_bits_mem) = RM (NULL);
+			   src->patXData = (Handle) RM (xh);
+			 }
 	       
 	       xdata_for_pixpat_with_space (src, dst, xh);
 	       
@@ -465,8 +477,12 @@ blt_pixpat_to_pixmap_simple_mode (RgnHandle rh, INTEGER mode,
 	     (xh,
 	      {
 		xdata_t *x = STARH (xh);
+		fprintf(stderr, "trace: blt_pixpat_simple xblt begin x=%p func=%p\n",
+			x, x->blt_func);
 		update_dirty_p = (*x->blt_func) (rh, mode, -dst_left,
 						 -dst_top, x, dst);
+		fprintf(stderr, "trace: blt_pixpat_simple xblt complete update=%d\n",
+			update_dirty_p);
 	      });
 	 }
      });
@@ -475,14 +491,21 @@ blt_pixpat_to_pixmap_simple_mode (RgnHandle rh, INTEGER mode,
   if (screen_dst_p && update_dirty_p)
     {
       const Rect *r = &RGN_BBOX (rh);
+      fprintf(stderr, "trace: blt_pixpat_simple dirty begin r=(%d,%d,%d,%d) dst_top=%d dst_left=%d when=%d\n",
+	      CW(r->top), CW(r->left), CW(r->bottom), CW(r->right),
+	      dst_top, dst_left, ROMlib_when);
       dirty_rect_accrue (CW (r->top) - dst_top, CW (r->left) - dst_left,
 			 CW (r->bottom) - dst_top, CW (r->right) - dst_left);
       if (ROMlib_when == WriteInBltrgn)
 	{
+	  fprintf(stderr, "trace: blt_pixpat_simple update_screen begin\n");
 	  dirty_rect_update_screen ();
+	  fprintf(stderr, "trace: blt_pixpat_simple flush begin\n");
 	  vdriver_flush_display();
+	  fprintf(stderr, "trace: blt_pixpat_simple update_screen complete\n");
 	}
     }
+  fprintf(stderr, "trace: blt_pixpat_simple complete\n");
 }
 
 
@@ -677,6 +700,8 @@ ROMlib_blt_pn (RgnHandle rh, INTEGER mode)
 {
   int bpp = theport_bpp ();
 
+  fprintf(stderr, "trace: ROMlib_blt_pn begin rh=%p mode=%d bpp=%d port=%p cport=%d\n",
+	  rh, mode, bpp, thePort, CGrafPort_p(thePort));
   mode &= 0x3F;
   if (mode < 8)
     mode |= 8;
@@ -701,6 +726,7 @@ ROMlib_blt_pn (RgnHandle rh, INTEGER mode)
     {
       BLT_PAT_FANCY (rh, mode, CPORT_PEN_PIXPAT, PORT_PEN_PAT);
     }
+  fprintf(stderr, "trace: ROMlib_blt_pn complete\n");
 }
 
 
@@ -710,6 +736,8 @@ P2 (PUBLIC pascal trap, void, StdRgn,
   RgnHandle rh;
   Rect r;
   
+  fprintf(stderr, "trace: StdRgn begin verb=%d rgn=%p port=%p cport=%d\n",
+	  verb, rgn, thePort, CGrafPort_p(thePort));
   if (!rgn || EmptyRgn (rgn))
     return;
   
@@ -718,6 +746,15 @@ P2 (PUBLIC pascal trap, void, StdRgn,
       warning_unexpected ("negative rgnSize = 0x%x\n", HxX (rgn, rgnSize));
       return;
     }
+  fprintf(stderr, "trace: StdRgn input bbox=(%d,%d,%d,%d) size=%d portBounds=(%d,%d,%d,%d) portRect=(%d,%d,%d,%d) penVis=%d\n",
+	  CW(HxX(rgn, rgnBBox.top)), CW(HxX(rgn, rgnBBox.left)),
+	  CW(HxX(rgn, rgnBBox.bottom)), CW(HxX(rgn, rgnBBox.right)),
+	  CW(HxX(rgn, rgnSize)),
+	  CW(PORT_BOUNDS(thePort).top), CW(PORT_BOUNDS(thePort).left),
+	  CW(PORT_BOUNDS(thePort).bottom), CW(PORT_BOUNDS(thePort).right),
+	  CW(PORT_RECT(thePort).top), CW(PORT_RECT(thePort).left),
+	  CW(PORT_RECT(thePort).bottom), CW(PORT_RECT(thePort).right),
+	  PORT_PEN_VIS(thePort));
 
   PIC_SAVE_EXCURSION
     ({
@@ -738,6 +775,10 @@ P2 (PUBLIC pascal trap, void, StdRgn,
 
   RectRgn (rh, &r);
   SectRgn (rgn, rh, rh);
+  fprintf(stderr, "trace: StdRgn after bounds sect rh=%p bbox=(%d,%d,%d,%d) size=%d\n",
+	  rh, CW(HxX(rh, rgnBBox.top)), CW(HxX(rh, rgnBBox.left)),
+	  CW(HxX(rh, rgnBBox.bottom)), CW(HxX(rh, rgnBBox.right)),
+	  CW(HxX(rh, rgnSize)));
   
   if (verb == frame)
     {
@@ -771,7 +812,15 @@ P2 (PUBLIC pascal trap, void, StdRgn,
     }
 
   SectRgn (rh, PORT_VIS_REGION (thePort), rh);
+  fprintf(stderr, "trace: StdRgn after vis sect bbox=(%d,%d,%d,%d) size=%d\n",
+	  CW(HxX(rh, rgnBBox.top)), CW(HxX(rh, rgnBBox.left)),
+	  CW(HxX(rh, rgnBBox.bottom)), CW(HxX(rh, rgnBBox.right)),
+	  CW(HxX(rh, rgnSize)));
   SectRgn (rh, PORT_CLIP_REGION (thePort), rh);
+  fprintf(stderr, "trace: StdRgn after clip sect bbox=(%d,%d,%d,%d) size=%d\n",
+	  CW(HxX(rh, rgnBBox.top)), CW(HxX(rh, rgnBBox.left)),
+	  CW(HxX(rh, rgnBBox.bottom)), CW(HxX(rh, rgnBBox.right)),
+	  CW(HxX(rh, rgnSize)));
   
   if (GWorld_p (thePort))
     LockPixels (CPORT_PIXMAP (thePort));
@@ -779,10 +828,15 @@ P2 (PUBLIC pascal trap, void, StdRgn,
   switch (verb)
     {
     case paint:
+      fprintf(stderr, "trace: StdRgn paint blt begin\n");
       ROMlib_blt_pn (rh, PORT_PEN_MODE (thePort));
+      fprintf(stderr, "trace: StdRgn paint blt complete\n");
       break;
     case erase:
+      fprintf(stderr, "trace: StdRgn erase blt begin bkPixPat=%p\n",
+	      CGrafPort_p (thePort) ? CPORT_BK_PIXPAT((CGrafPtr) thePort) : 0);
       BLT_PAT_SIMPLE (rh, patCopy, CPORT_BK_PIXPAT, PORT_BK_PAT);
+      fprintf(stderr, "trace: StdRgn erase blt complete\n");
       break;
     case invert:
       {
@@ -796,7 +850,9 @@ P2 (PUBLIC pascal trap, void, StdRgn,
       }
       break;
     case fill:
+      fprintf(stderr, "trace: StdRgn fill blt begin\n");
       BLT_PAT_SIMPLE (rh, patCopy, CPORT_FILL_PIXPAT, PORT_FILL_PAT);
+      fprintf(stderr, "trace: StdRgn fill blt complete\n");
       break;
     default:
       gui_fatal ("unknown GrafVerb");
@@ -808,4 +864,5 @@ P2 (PUBLIC pascal trap, void, StdRgn,
   
   SET_HILITE_BIT ();
   DisposeRgn (rh);
+  fprintf(stderr, "trace: StdRgn complete verb=%d\n", verb);
 }

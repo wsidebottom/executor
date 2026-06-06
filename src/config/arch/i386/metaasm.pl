@@ -85,8 +85,12 @@ close (ASMSAMPLES);
 
 # Compile opfind
     unlink ("opfind");
+    $build_cc = $ENV{"BUILD_CC"} || "gcc";
+    $build_cflags = $ENV{"BUILD_CFLAGS"} || "";
+    $opfind_src = $opfind_path;
+    $opfind_src = "../$opfind_src" if (! -f $opfind_src && -f "../$opfind_src");
     die "\nProblems making opfind.\n"
-	if (system ("make -s opfind > /dev/null"));
+	if (system ("$build_cc $build_cflags -DCOMPILE_FOR_BUILD -I. -I../include -I../config/arch/i386 $opfind_src -o opfind > /dev/null"));
 
 print STDERR "done.\nPass 2: ";
 

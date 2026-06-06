@@ -17,7 +17,7 @@
 #if defined(__unix__) || defined (MACOSX)
 /* * */
 extern Display *SDL_Display;
-extern Window SDL_Window;
+extern Window SDL_X11_Window;
 
 #elif defined(_WIN32)
 /* * */

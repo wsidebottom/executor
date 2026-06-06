@@ -1,6 +1,10 @@
 #include <windows.h>
 #include "paramline.h"
 
+#if !defined (STDCALL)
+#define STDCALL __stdcall
+#endif
+
 /*
  * Rename file specified by argv[1] to name specified by argv[2].
  * keep hammering until we can do it.

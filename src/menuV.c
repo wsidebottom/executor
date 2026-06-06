@@ -24,6 +24,8 @@ char ROMlib_rcsid_menuV[] =
 
 P1(PUBLIC pascal trap, void, InitProcMenu, INTEGER, mbid)
 {
+  fprintf (stderr, "trace: InitProcMenu entered mbid=%d MenuList=%p\n", CW (mbid), (void *) MenuList);
+  fflush (stderr);
   if (!MenuList)
     InitMenus();
   
@@ -40,9 +42,18 @@ P1(PUBLIC pascal trap, void, InitProcMenu, INTEGER, mbid)
      * GetResource to fail.  A small test program then confirmed that
      * the bits are not masked off.
      */
+    fprintf (stderr, "trace: InitProcMenu GetResource begin\n");
+    fflush (stderr);
     MBDFHndl = RM(GetResource(TICK("MBDF"), mbid));
+    fprintf (stderr, "trace: InitProcMenu GetResource complete MBDFHndl=%p host=%p\n",
+	     (void *) MBDFHndl, (void *) MR (MBDFHndl));
+    fflush (stderr);
     HxX(MENULIST, mufu) = CW(mbid);
+    fprintf (stderr, "trace: InitProcMenu MBDFCALL mbInit begin\n");
+    fflush (stderr);
     MBDFCALL(mbInit, 0, 0L);
+    fprintf (stderr, "trace: InitProcMenu MBDFCALL mbInit complete\n");
+    fflush (stderr);
 }
 
 P0(PUBLIC pascal trap, LONGINT, MenuChoice)

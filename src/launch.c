@@ -507,6 +507,9 @@ PRIVATE void launchchain(StringPtr fName, INTEGER vRefNum, BOOLEAN resetmemory,
     char quickbytes[grafSize];
     LONGINT tmpa5;
 
+    fprintf (stderr, "trace: launchchain entered app='%.*s' vref=%d reset=%d\n",
+	     fName[0], fName + 1, CW (vRefNum), resetmemory);
+    fflush (stderr);
 
     for (p = fName + fName[0] + 1; p > fName && *--p != ':';)
 	;
@@ -526,7 +529,12 @@ PRIVATE void launchchain(StringPtr fName, INTEGER vRefNum, BOOLEAN resetmemory,
 	hpb.hFileInfo.ioVRefNum   = CW(vRefNum);
 	hpb.hFileInfo.ioFDirIndex = CWC (0);
 	hpb.hFileInfo.ioDirID     = 0;
+	fprintf (stderr, "trace: launchchain PBGetCatInfo begin\n");
+	fflush (stderr);
 	PBGetCatInfo(&hpb, FALSE);
+	fprintf (stderr, "trace: launchchain PBGetCatInfo complete err=%d parID=%ld\n",
+		 CW (hpb.hFileInfo.ioResult), (long) CL (hpb.hFileInfo.ioFlParID));
+	fflush (stderr);
 	wdpb.ioVRefNum = CW(vRefNum);
 	wdpb.ioWDDirID = hpb.hFileInfo.ioFlParID;
       }
@@ -541,7 +549,12 @@ PRIVATE void launchchain(StringPtr fName, INTEGER vRefNum, BOOLEAN resetmemory,
     /* Do not do this -- Loser does it SFSaveDisk_Update (vRefNum, fName); */
     wdpb.ioWDProcID = T('X','c','t','r');
     wdpb.ioNamePtr = 0;
+    fprintf (stderr, "trace: launchchain PBOpenWD begin\n");
+    fflush (stderr);
     PBOpenWD(&wdpb, FALSE);
+    fprintf (stderr, "trace: launchchain PBOpenWD complete err=%d vref=%d\n",
+	     CW (wdpb.ioResult), CW (wdpb.ioVRefNum));
+    fflush (stderr);
     ROMlib_exevrefnum = CW(wdpb.ioVRefNum);
     ROMlib_exefname = CurApName;
 #if 0
@@ -550,11 +563,21 @@ PRIVATE void launchchain(StringPtr fName, INTEGER vRefNum, BOOLEAN resetmemory,
 	CloseResFile(CurMap);
 #endif
     SetVol((StringPtr) 0, ROMlib_exevrefnum);
+    fprintf (stderr, "trace: launchchain OpenResFile begin name='%.*s' vref=%d\n",
+	     ROMlib_exefname[0], ROMlib_exefname + 1, ROMlib_exevrefnum);
+    fflush (stderr);
     CurApRefNum = CW(OpenResFile(ROMlib_exefname));
+    fprintf (stderr, "trace: launchchain OpenResFile complete ref=%d\n", CurApRefNum);
+    fflush (stderr);
 
     /* setupsignals(); */
 
+    fprintf (stderr, "trace: launchchain GetFInfo begin\n");
+    fflush (stderr);
     err = GetFInfo(ROMlib_exefname, ROMlib_exevrefnum, &finfo);
+    fprintf (stderr, "trace: launchchain GetFInfo complete err=%d type=0x%08lx creator=0x%08lx\n",
+	     err, (unsigned long) CL (finfo.fdType), (unsigned long) CL (finfo.fdCreator));
+    fflush (stderr);
     
     process_create (FALSE, finfo.fdType, finfo.fdCreator);
     
@@ -608,8 +631,16 @@ PRIVATE void launchchain(StringPtr fName, INTEGER vRefNum, BOOLEAN resetmemory,
     ROMlib_MacSize.first    = INITIALPAIRVALUE;
     ROMlib_directdiskaccess = FALSE;
     ROMlib_clear_gestalt_list ();
+    fprintf (stderr, "trace: launchchain ParseConfig ExecutorDefault begin\n");
+    fflush (stderr);
     ParseConfigFile ((StringPtr) "\017ExecutorDefault", 0);
+    fprintf (stderr, "trace: launchchain ParseConfig ExecutorDefault complete\n");
+    fflush (stderr);
+    fprintf (stderr, "trace: launchchain ParseConfig app begin\n");
+    fflush (stderr);
     ParseConfigFile (ename, err == noErr ? CL(finfo.fdCreator) : 0);
+    fprintf (stderr, "trace: launchchain ParseConfig app complete\n");
+    fflush (stderr);
     ROMlib_clockonoff(!ROMlib_noclock);
     if ((ROMlib_ScreenSize.first != INITIALPAIRVALUE
 	 || ROMlib_MacSize.first != INITIALPAIRVALUE))
@@ -619,8 +650,16 @@ PRIVATE void launchchain(StringPtr fName, INTEGER vRefNum, BOOLEAN resetmemory,
 	if (ROMlib_MacSize.first == INITIALPAIRVALUE)
 	  ROMlib_MacSize = ROMlib_ScreenSize;
       }
+    fprintf (stderr, "trace: launchchain Get1Resource CODE0 begin\n");
+    fflush (stderr);
     code0 = Get1Resource (T('C','O','D','E'), 0);
+    fprintf (stderr, "trace: launchchain Get1Resource CODE0 complete handle=%p\n", (void *) code0);
+    fflush (stderr);
+    fprintf (stderr, "trace: launchchain Get1Resource cfrg0 begin\n");
+    fflush (stderr);
     cfrg0 = Get1Resource (T('c','f','r','g'), 0);
+    fprintf (stderr, "trace: launchchain Get1Resource cfrg0 complete handle=%p\n", (void *) cfrg0);
+    fflush (stderr);
 
     if (cfrg0 && ppc_launch_p &&
 	ROMlib_find_cfrg (cfrg0, T('p','w','p','c'), kApplicationCFrag,
@@ -638,6 +677,9 @@ PRIVATE void launchchain(StringPtr fName, INTEGER vRefNum, BOOLEAN resetmemory,
 	  }
 	else
 	  ROMlib_launch_failure = launch_damaged;
+	fprintf (stderr, "trace: launchchain no CODE/cfrg, ExitToShell failure=%d\n",
+		 ROMlib_launch_failure);
+	fflush (stderr);
 	C_ExitToShell ();
       }
     
@@ -645,9 +687,13 @@ PRIVATE void launchchain(StringPtr fName, INTEGER vRefNum, BOOLEAN resetmemory,
       Handle size_resource_h;
       int16 size_flags;
       
+      fprintf (stderr, "trace: launchchain SIZE resource begin\n");
+      fflush (stderr);
       size_resource_h = Get1Resource (T ('S','I','Z','E'), 0);
       if (size_resource_h == NULL)
 	size_resource_h = Get1Resource (T ('S','I','Z','E'), -1);
+      fprintf (stderr, "trace: launchchain SIZE resource complete handle=%p\n", (void *) size_resource_h);
+      fflush (stderr);
       if (size_resource_h)
 	{
 	  size_info_t *size_resource;
@@ -742,6 +788,8 @@ PRIVATE void launchchain(StringPtr fName, INTEGER vRefNum, BOOLEAN resetmemory,
  */
     if (code0)
       {
+	fprintf (stderr, "trace: launchchain beginexecutingat begin\n");
+	fflush (stderr);
 	memcpy(MR(CurrentA5) + jumpoff, lp, jumplen); /* copy in the
 							 jump table */
 	ROMlib_destroy_blocks (0, ~0, FALSE);
