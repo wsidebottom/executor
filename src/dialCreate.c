@@ -392,6 +392,8 @@ P3 (PUBLIC pascal trap, DialogPtr, GetNewDialog, INTEGER, id,	/* IMI-413 */
   boolean_t color_p;
   
   dialog_res_h = (dlogh) ROMlib_getrestid (TICK ("DLOG"), id);
+  if (!dialog_res_h || !STARH (dialog_res_h))
+    return NULL;
   
   dialog_item_list_res_h = ROMlib_getrestid (TICK ("DITL"),
 					     Hx (dialog_res_h, dlgditl));

@@ -29,6 +29,19 @@ char ROMlib_rcsid_resGet[] =
 
 #include <ctype.h>
 
+PRIVATE const char *
+trace_restype (ResType typ)
+{
+  static char buf[5];
+
+  buf[0] = (typ >> 24) & 0xFF;
+  buf[1] = (typ >> 16) & 0xFF;
+  buf[2] = (typ >> 8) & 0xFF;
+  buf[3] = typ & 0xFF;
+  buf[4] = 0;
+  return buf;
+}
+
 P1(PUBLIC pascal trap, void, SetResLoad, BOOLEAN, load)
 {
     ResLoad = load;
@@ -352,6 +365,14 @@ P2(PUBLIC pascal trap, Handle, GetResource, ResType, typ, INTEGER, id)
 	*((char *) STARH (retval) + 1) = 0; /* turn off Music prefs */
       }
 #endif
+    if (!retval && typ != TICK("KCHR"))
+      {
+	fprintf (stderr,
+		 "trace: GetResource miss type='%.4s' id=%d CurMap=%d ResErr=%d trap=0x%04x\n",
+		 trace_restype (typ), id, Cx (CurMap), Cx (ResErr),
+		 (unsigned) mostrecenttrap);
+	fflush (stderr);
+      }
     return retval;
 }
 
@@ -375,6 +396,14 @@ P2(PUBLIC pascal trap, Handle, Get1Resource, ResType, typ,    /* IMIV-16 */
     {
       warn_resource_not_found (typ, id);
       retval = NULL;
+    }
+  if (!retval && typ != TICK("KCHR"))
+    {
+      fprintf (stderr,
+	       "trace: Get1Resource miss type='%.4s' id=%d CurMap=%d ResErr=%d trap=0x%04x\n",
+	       trace_restype (typ), id, Cx (CurMap), Cx (ResErr),
+	       (unsigned) mostrecenttrap);
+      fflush (stderr);
     }
   if (ResErr == CWC (resNotFound))
     /* IMIV */

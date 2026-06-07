@@ -682,6 +682,13 @@ P0(PUBLIC pascal trap, void, ExitToShell)
     WindowPeek t_w;
     int i;
 
+    fprintf (stderr,
+	     "trace: ExitToShell entered app='%.*s' beenhere=%d ROMlib_exit=%d trap=0x%04x D0=0x%08lx A0=0x%08lx A5=0x%08lx\n",
+	     CurApName[0], CurApName + 1, beenhere, ROMlib_exit,
+	     (unsigned) mostrecenttrap, (unsigned long) EM_D0,
+	     (unsigned long) EM_A0, (unsigned long) EM_A5);
+    fflush (stderr);
+
     if (ROMlib_mods & optionKey)
       ROMlib_exit = TRUE;
 
@@ -733,6 +740,8 @@ P0(PUBLIC pascal trap, void, ExitToShell)
 
 	if (valid_browser())
 	  {
+	    fprintf (stderr, "trace: ExitToShell relaunching Browser\n");
+	    fflush (stderr);
 	    /* NOTE: much of the initialization done above isn't really
 	             needed here, but I'd prefer to have the same environment
 		     when we auto-launch browser as when we choose an app
@@ -783,6 +792,9 @@ P0(PUBLIC pascal trap, void, ExitToShell)
 	write(2, ROMlib_errorstring, strlen(ROMlib_errorstring));
 	gui_abort();
     }
+    fprintf (stderr, "trace: ExitToShell final exit status=%d\n",
+	     ROMlib_exit == 1 ? 0 : ROMlib_exit);
+    fflush (stderr);
 #if defined(NEXT)
     stopprotectingus();
 #endif

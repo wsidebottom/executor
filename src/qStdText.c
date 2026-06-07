@@ -269,6 +269,20 @@ text_helper (LONGINT n, Ptr textbufp, Point *nump, Point *denp,
   ALLOCABEGIN
   PAUSEDECL;
 
+  if (!thePort)
+    {
+      if (action == text_helper_measure)
+	{
+	  if (nump)
+	    nump->h = nump->v = CWC (0);
+	  if (denp)
+	    denp->h = denp->v = CWC (0);
+	  if (finfop)
+	    memset (finfop, 0, sizeof *finfop);
+	}
+      return 0;
+    }
+
   p = (unsigned char *) textbufp;
   num.h = CW (nump->h);
   num.v = CW (nump->v);

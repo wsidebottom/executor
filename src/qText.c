@@ -119,6 +119,8 @@ P3(PUBLIC pascal trap, INTEGER, TextWidth, Ptr, tb, INTEGER, fb, INTEGER, bc)
   
   np.h = np.v = dp.h = dp.v = CWC(256);
   retval =  CALLTXMEAS(bc, tb+fb, &np, &dp, &fi);
+  if (dp.h == CWC (0))
+    dp.h = CWC (1);
   return FixMul ((LONGINT) retval << 16,
 		 (Fixed) CW(np.h) << 8) / ((LONGINT) CW(dp.h) << 8);
 }
@@ -132,6 +134,8 @@ P1(PUBLIC pascal trap, void, GetFontInfo, FontInfo *, ip)
     pd.v = CWC(1);
     pd.h = CWC(1);
     CALLTXMEAS(0, (Ptr) "", &pn, &pd, ip);
+    if (pd.v == CWC (0))
+      pd.v = CWC (1);
     ip->ascent  = CW(CW(ip->ascent ) * CW(pn.v) / CW(pd.v));
     ip->descent = CW(CW(ip->descent) * CW(pn.v) / CW(pd.v));
     ip->leading = CW(CW(ip->leading) * CW(pn.v) / CW(pd.v));

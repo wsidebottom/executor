@@ -161,6 +161,8 @@ static const LONGINT high_bits_to_colors[2][2][2] =
 P1 (PUBLIC pascal trap, void, RGBForeColor,
     RGBColor *, color)
 {
+  if (!color || !thePort)
+    return;
   if (CGrafPort_p (thePort))
     {
       CPORT_RGB_FG_COLOR (theCPort) = *color;
@@ -186,6 +188,8 @@ P1 (PUBLIC pascal trap, void, RGBForeColor,
 P1 (PUBLIC pascal trap, void, RGBBackColor,
     RGBColor *, color)
 {
+  if (!color || !thePort)
+    return;
 
 #if defined (EVIL_ILLUSTRATOR_7_HACK)
   if (ROMlib_evil_illustrator_7_hack)
@@ -222,6 +226,13 @@ P1 (PUBLIC pascal trap, void, RGBBackColor,
 P1 (PUBLIC pascal trap, void, GetForeColor,
     RGBColor *, color)
 {
+  if (!color)
+    return;
+  if (!thePort)
+    {
+      color->red = color->green = color->blue = CWC (0);
+      return;
+    }
   if (CGrafPort_p (thePort))
     *color = CPORT_RGB_FG_COLOR (theCPort);
   else
@@ -231,6 +242,13 @@ P1 (PUBLIC pascal trap, void, GetForeColor,
 P1 (PUBLIC pascal trap, void, GetBackColor,
     RGBColor *, color)
 {
+  if (!color)
+    return;
+  if (!thePort)
+    {
+      color->red = color->green = color->blue = CWC (0xFFFF);
+      return;
+    }
   if (CGrafPort_p (thePort))
     *color = CPORT_RGB_BK_COLOR (theCPort);
   else

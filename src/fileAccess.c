@@ -955,6 +955,31 @@ A3(PUBLIC, char *, ROMlib_resname, char *, pathname,		/* INTERNAL */
     return newname;
 }
 
+A3(PRIVATE, char *, old_percent_resname, char *, pathname,
+					    char *, filename, char *, endname)
+{
+    int pathnamesize, filenamesize, newsize;
+    char *newname;
+
+    pathnamesize = filename - pathname;
+    filenamesize = endname - filename;
+    if (pathnamesize)
+      {
+	newsize = pathnamesize + filenamesize + 1;
+	newname = malloc (newsize);
+	memcpy (newname, pathname, pathnamesize);
+	newname[pathnamesize] = '%';
+	memcpy (newname + pathnamesize + 1, filename, filenamesize);
+      }
+    else
+      {
+	newsize = filenamesize + sizeof (ROOTS_PERCENT_FILE);
+	newname = malloc (newsize);
+	sprintf (newname, "%s%s", filename, ROOTS_PERCENT_FILE);
+      }
+    return newname;
+}
+
 /*
  * macopen opens the file using mac permissions, returning an OSErr
  * the file descriptor of the opened file is filled in where fdp points
@@ -1131,6 +1156,28 @@ A4(PRIVATE, OSErr, PBOpenForkD, ParmBlkPtr, pb, BOOLEAN, a,
 	    if (err == noErr) {
 		err = macopen(pathname, pb->ioParam.ioPermssn,
 		      &fp->fcfd, fork == ResourceFork, &fp->fcflags);
+		if (err != noErr && fork == ResourceFork && netatalk_conventions_p)
+		  {
+		    char *oldname;
+		    LONGINT oldfd;
+		    Byte oldflags;
+		    OSErr olderr;
+
+		    oldname = old_percent_resname (need_to_free, filename, endname);
+		    oldflags = fp->fcflags;
+		    olderr = macopen(oldname, pb->ioParam.ioPermssn,
+				     &oldfd, TRUE, &oldflags);
+		    if (olderr == noErr)
+		      {
+			free(pathname);
+			pathname = oldname;
+			fp->fcfd = oldfd;
+			fp->fcflags = oldflags;
+			err = noErr;
+		      }
+		    else
+		      free(oldname);
+		  }
 		if (err != noErr
 		    && (fork != ResourceFork ||
 			(err = ROMlib_newresfork(pathname, &fp->fcfd, TRUE))))

@@ -392,6 +392,12 @@ PUBLIC void SFSaveDisk_Update (INTEGER vrefnum, Str255 filename)
 PUBLIC uint32 ROMlib_version_long;
 
 PRIVATE boolean_t
+launch_handle_body_valid_p (Handle h)
+{
+  return h && h->p;
+}
+
+PRIVATE boolean_t
 cfrg_match (const cfir_t *cfirp, OSType arch_x, uint8 type_x, Str255 name)
 {
   boolean_t retval;
@@ -407,20 +413,66 @@ PUBLIC cfir_t *
 ROMlib_find_cfrg (Handle cfrg, OSType arch, uint8 type, Str255 name)
 {
   cfrg_resource_t *cfrgp;
+  Size cfrg_size;
   int n_descripts;
   cfir_t *cfirp;
+  char *cfrg_end;
   OSType desired_arch_x;
   uint8 type_x;
   cfir_t *retval;
 
+  if (!cfrg || !STARH (cfrg))
+    {
+      fprintf (stderr,
+	       "trace: ROMlib_find_cfrg empty handle cfrg=%p trap=0x%04x\n",
+	       (void *) cfrg, (unsigned) mostrecenttrap);
+      fflush (stderr);
+      return NULL;
+    }
+  cfrg_size = GetHandleSize (cfrg);
+  if (cfrg_size < (Size) sizeof *cfrgp)
+    {
+      fprintf (stderr,
+	       "trace: ROMlib_find_cfrg short handle cfrg=%p size=%ld trap=0x%04x\n",
+	       (void *) cfrg, (long) cfrg_size, (unsigned) mostrecenttrap);
+      fflush (stderr);
+      return NULL;
+    }
   cfrgp = (cfrg_resource_t *) STARH (cfrg);
   cfirp = (cfir_t *) ((char *) cfrgp + sizeof *cfrgp);
+  cfrg_end = (char *) cfrgp + cfrg_size;
   desired_arch_x = CL (arch);
   type_x = CB (type);
   for (n_descripts = CFRG_N_DESCRIPTS (cfrgp);
-       n_descripts > 0 && !cfrg_match (cfirp, desired_arch_x, type_x, name);
-       --n_descripts, cfirp = (cfir_t *) ((char *) cfirp + CFIR_LENGTH(cfirp)))
-    ;
+       n_descripts > 0;
+       --n_descripts)
+    {
+      int cfir_length;
+
+      if ((char *) cfirp + sizeof *cfirp > cfrg_end)
+	{
+	  fprintf (stderr,
+		   "trace: ROMlib_find_cfrg descriptor outside cfrg=%p cfir=%p end=%p trap=0x%04x\n",
+		   (void *) cfrg, (void *) cfirp, (void *) cfrg_end,
+		   (unsigned) mostrecenttrap);
+	  fflush (stderr);
+	  return NULL;
+	}
+      cfir_length = CFIR_LENGTH (cfirp);
+      if (cfir_length < (int) sizeof *cfirp
+	  || (char *) cfirp + cfir_length > cfrg_end)
+	{
+	  fprintf (stderr,
+		   "trace: ROMlib_find_cfrg bad descriptor length cfrg=%p cfir=%p length=%d end=%p trap=0x%04x\n",
+		   (void *) cfrg, (void *) cfirp, cfir_length,
+		   (void *) cfrg_end, (unsigned) mostrecenttrap);
+	  fflush (stderr);
+	  return NULL;
+	}
+      if (cfrg_match (cfirp, desired_arch_x, type_x, name))
+	break;
+      cfirp = (cfir_t *) ((char *) cfirp + cfir_length);
+    }
   retval = n_descripts > 0 ? cfirp : 0;
 
   return retval;
@@ -655,11 +707,18 @@ PRIVATE void launchchain(StringPtr fName, INTEGER vRefNum, BOOLEAN resetmemory,
     code0 = Get1Resource (T('C','O','D','E'), 0);
     fprintf (stderr, "trace: launchchain Get1Resource CODE0 complete handle=%p\n", (void *) code0);
     fflush (stderr);
-    fprintf (stderr, "trace: launchchain Get1Resource cfrg0 begin\n");
-    fflush (stderr);
-    cfrg0 = Get1Resource (T('c','f','r','g'), 0);
-    fprintf (stderr, "trace: launchchain Get1Resource cfrg0 complete handle=%p\n", (void *) cfrg0);
-    fflush (stderr);
+    if (code0)
+      HLock (code0);
+    if (!code0 || ppc_launch_p)
+      {
+	fprintf (stderr, "trace: launchchain Get1Resource cfrg0 begin\n");
+	fflush (stderr);
+	cfrg0 = Get1Resource (T('c','f','r','g'), 0);
+	fprintf (stderr, "trace: launchchain Get1Resource cfrg0 complete handle=%p\n", (void *) cfrg0);
+	fflush (stderr);
+      }
+    else
+      cfrg0 = NULL;
 
     if (cfrg0 && ppc_launch_p &&
 	ROMlib_find_cfrg (cfrg0, T('p','w','p','c'), kApplicationCFrag,
@@ -694,7 +753,7 @@ PRIVATE void launchchain(StringPtr fName, INTEGER vRefNum, BOOLEAN resetmemory,
 	size_resource_h = Get1Resource (T ('S','I','Z','E'), -1);
       fprintf (stderr, "trace: launchchain SIZE resource complete handle=%p\n", (void *) size_resource_h);
       fflush (stderr);
-      if (size_resource_h)
+      if (size_resource_h && launch_handle_body_valid_p (size_resource_h))
 	{
 	  size_info_t *size_resource;
 	  
@@ -706,6 +765,13 @@ PRIVATE void launchchain(StringPtr fName, INTEGER vRefNum, BOOLEAN resetmemory,
 	}
       else
 	{
+	  if (size_resource_h)
+	    {
+	      fprintf (stderr,
+		       "trace: launchchain ignoring invalid SIZE handle=%p trap=0x%04x\n",
+		       (void *) size_resource_h, (unsigned) mostrecenttrap);
+	      fflush (stderr);
+	    }
 	  memset (&size_info, '\000', sizeof size_info);
 	  size_info.size_resource_present_p = FALSE;
 	}
@@ -722,13 +788,21 @@ PRIVATE void launchchain(StringPtr fName, INTEGER vRefNum, BOOLEAN resetmemory,
     }
     
     h = GetResource(CL(finfo.fdCreator), 0);
-    if (h) {
+    if (h && launch_handle_body_valid_p (h)) {
 	namelen = *MR(*(unsigned char **)h);
 	namebuf = alloca(namelen+1);
 	memcpy(namebuf, (char *) STARH(h)+1, namelen);
 	namebuf[namelen] = 0;
-    } else
+    } else {
+	if (h)
+	  {
+	    fprintf (stderr,
+		     "trace: launchchain ignoring invalid creator name handle=%p trap=0x%04x\n",
+		     (void *) h, (unsigned) mostrecenttrap);
+	    fflush (stderr);
+	  }
 	namebuf = "";
+    }
 
     if (!code0)
       {
@@ -741,6 +815,17 @@ PRIVATE void launchchain(StringPtr fName, INTEGER vRefNum, BOOLEAN resetmemory,
     else
       {
 	HLock(code0);
+	if (!launch_handle_body_valid_p (code0) || GetHandleSize (code0) < 16)
+	  {
+	    fprintf (stderr,
+		     "trace: launchchain invalid CODE0 handle=%p size=%ld trap=0x%04x\n",
+		     (void *) code0,
+		     launch_handle_body_valid_p (code0) ? (long) GetHandleSize (code0) : -1L,
+		     (unsigned) mostrecenttrap);
+	    fflush (stderr);
+	    ROMlib_launch_failure = launch_damaged;
+	    C_ExitToShell ();
+	  }
 
 	lp = (LONGINT *) STARH(code0);
 	abovea5 = CL(*lp++);

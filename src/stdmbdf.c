@@ -195,6 +195,14 @@ mbdf_draw (int32 draw_p)
   LineTo (CW (r.right) - 1, CW (MBarHeight) - 1);
   if (draw_p == DRAWMENUBAR)
     {
+      if (!MR (MenuList) || !STARH (MENULIST))
+	{
+	  ClipRect (&PORT_RECT (MR (wmgr_port)));
+	  RGBForeColor (&ROMlib_black_rgb_color);
+	  RGBBackColor (&ROMlib_white_rgb_color);
+	  return;
+	}
+
       /* draw titles */
       r.bottom = CW (CW (r.bottom) - 1);
       

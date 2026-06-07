@@ -34,7 +34,14 @@ P9(PUBLIC pascal trap, ControlHandle, NewControl, WindowPtr, wst, Rect *, r,
     AuxCtlHandle tmp, auxctlhead;
     Handle temph;
     
+    if (!wst || !r)
+      {
+	warning_unexpected ("NewControl called without owner window");
+	return 0;
+      }
     retval = (ControlHandle) NewHandle((Size) sizeof(ControlRecord));
+    if (!retval)
+      return 0;
     temph = RM(GetResource(TICK("CDEF"), procid>>4));
     if (!(HxX(retval, contrlDefProc) = temph)) {
         DisposHandle((Handle) retval);
@@ -127,7 +134,7 @@ P2(PUBLIC pascal trap, ControlHandle, GetNewControl,		/* IMI-321 */
             Hx(wh, _cvisible) ? 255 : 0, Hx(wh, _cvalue), Hx(wh, _cmin),
 	    Hx(wh, _cmax), Hx(wh, _cprocid),
 	    CL(*(LONGINT *)((char *)&HxX(wh, _crect) + 18)));	/* _crefcon */
-    if (ctab_res_h)
+    if (retval && ctab_res_h)
       SetCtlColor (retval, (CCTabHandle) ctab_res_h);
     return retval;
 }

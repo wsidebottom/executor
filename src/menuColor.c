@@ -201,6 +201,9 @@ P2 (PUBLIC pascal trap, MCEntryPtr, GetMCEntry,
   MCEntryPtr t;
   
   menu_c_info = MR (MenuCInfo);
+  if (!menu_c_info || !STARH (menu_c_info))
+    return 0;
+
   for (t = STARH (menu_c_info); MCENTRY_ID_X (t) != CWC (-99); t ++)
     {
       if (MCENTRY_ID (t) == menu_id

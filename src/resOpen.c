@@ -284,9 +284,36 @@ PRIVATE Handle mgetres_helper (resmaphand map, resref *rr, int32 dlen,
       else
 	{
 	  retval = MR (rr->rhand);
-	  ReallocHandle (retval, uncompressed_size + dcmp_offset);
+	  if (retval)
+	    ReallocHandle (retval, uncompressed_size + dcmp_offset);
+	  else
+	    {
+	      fprintf (stderr,
+		       "trace: mgetres_helper replacing stale resource handle map=%p rr=%p rhand=%p type? trap=0x%04x\n",
+		       (void *) map, (void *) rr, (void *) rr->rhand,
+		       (unsigned) mostrecenttrap);
+	      fflush (stderr);
+	      rr->rhand = NULL;
+	      TheZone = ((rr->ratr & resSysHeap)
+			 ? SysZone
+			 : RM (HandleZone ((Handle) map)));
+	      retval = NewHandle (uncompressed_size + dcmp_offset);
+	      rr->rhand = RM (retval);
+	    }
 	}
       err = MemError ();
+      if (err != noErr || !retval || !STARH (retval))
+	{
+	  ROMlib_setreserr (err != noErr ? err : memFullErr);
+	  if (dcmp_workspace)
+	    DisposPtr (dcmp_workspace);
+	  if (rr->rhand)
+	    {
+	      DisposHandle (MR (rr->rhand));
+	      rr->rhand = NULL;
+	    }
+	  return NULL;
+	}
       xxx = STARH (retval) + uncompressed_size + dcmp_offset - dlen;
       if ((ROMlib_setreserr (err)) ||
 	  (ROMlib_setreserr (err = FSReadAll (Hx (map, resfn), &dlen, xxx))))
@@ -331,6 +358,24 @@ PRIVATE Handle mgetres_helper (resmaphand map, resref *rr, int32 dlen,
  *       mgetres when the handle's already there.
  */
 
+PRIVATE int32
+next_resource_data_offset (resmaphand map, resref *current_rr)
+{
+  INTEGER i, j;
+  typref *tr;
+  resref *rr;
+  int32 current_offset, next_offset, offset;
+
+  current_offset = B3TOLONG (current_rr->doff);
+  next_offset = Hx (map, rh.datlen);
+  WALKTANDR (map, i, tr, j, rr)
+    offset = B3TOLONG (rr->doff);
+    if (offset > current_offset && offset < next_offset)
+      next_offset = offset;
+  EWALKTANDR (tr, rr)
+  return next_offset;
+}
+
 Handle
 ROMlib_mgetres2 (resmaphand map, resref *rr)
 {
@@ -356,6 +401,10 @@ ROMlib_mgetres2 (resmaphand map, resref *rr)
 	  int32 lc;
 	  OSErr err;
 	  int32 dlen; /* length on disk (remaining) */
+	  int32 data_offset;
+	  int32 data_remaining;
+	  int32 next_offset;
+	  int32 max_payload_len;
 
 	  lc = sizeof (Size);
 	  err = FSReadAll (Hx (map, resfn), &lc, (Ptr) &dlen);
@@ -365,6 +414,62 @@ ROMlib_mgetres2 (resmaphand map, resref *rr)
 	  else
 	    {
 	      dlen = CL (dlen);
+	      data_offset = B3TOLONG (rr->doff);
+	      data_remaining = Hx (map, rh.datlen) - data_offset;
+	      next_offset = next_resource_data_offset (map, rr);
+	      if (next_offset > data_offset)
+		max_payload_len = next_offset - data_offset - sizeof (Size);
+	      else
+		max_payload_len = data_remaining - sizeof (Size);
+	      if (dlen < 0 || dlen > max_payload_len)
+		{
+		  int32 alt_len;
+
+		  alt_len = -1;
+		  if (data_offset >= (int32) sizeof (Size))
+		    {
+		      int32 raw_alt_len;
+
+		      ROMlib_setreserr (SetFPos (Hx (map, resfn), fsFromStart,
+						 loc - sizeof (Size)));
+		      if (ResErr == noErr)
+			{
+			  lc = sizeof (Size);
+			  err = FSReadAll (Hx (map, resfn), &lc,
+					   (Ptr) &raw_alt_len);
+			  ROMlib_setreserr (err);
+			  if (ResErr == noErr)
+			    {
+			      raw_alt_len = CL (raw_alt_len);
+			      if (raw_alt_len > 0 && raw_alt_len <= data_remaining)
+				alt_len = raw_alt_len;
+			    }
+			}
+		    }
+
+		  if (alt_len < 0)
+		    {
+		      if (next_offset > data_offset)
+			alt_len = next_offset - data_offset;
+		    }
+
+		  if (alt_len >= 0 && alt_len <= data_remaining)
+		    {
+		      fprintf (stderr,
+			       "trace: ROMlib_mgetres2 corrected resource length old=%ld new=%ld offset=0x%lx map=%p rr=%p\n",
+			       (long) dlen, (long) alt_len,
+			       (unsigned long) data_offset, (void *) map,
+			       (void *) rr);
+		      fflush (stderr);
+		      dlen = alt_len;
+		      ROMlib_setreserr (SetFPos (Hx (map, resfn), fsFromStart,
+						 loc));
+		    }
+		}
+	      if (ResErr != noErr)
+		retval = NULL;
+	      else
+		{
 	      if (ResLoad)
 		retval = mgetres_helper (map, rr, dlen, retval);
 	      else if (!rr->rhand)
@@ -385,6 +490,7 @@ ROMlib_mgetres2 (resmaphand map, resref *rr)
 			    | ((rr->ratr & resLocked)    ? LOCKBIT  : 0)
 			    | ((rr->ratr & resPurgeable) ? PURGEBIT : 0)));
   
+		}
 	    }
 	}
       HSetState ((Handle) map, state);
@@ -407,6 +513,16 @@ A2(PUBLIC, resmaphand, ROMlib_rntohandl, INTEGER, rn,		/* INTERNAL */
 
     ph = 0;
     WALKMAPTOP(map)
+        if (!STARH(map))
+	  {
+	    fprintf (stderr,
+		     "trace: ROMlib_rntohandl empty map handle rn=%d map=%p ph=%p TopMapHndl=%p CurMap=%d\n",
+		     rn, (void *) map, (void *) ph, (void *) MR (TopMapHndl),
+		     Cx (CurMap));
+	    fflush (stderr);
+	    map = 0;
+	    break;
+	  }
         if (Hx(map, resfn) == rn)
             break;
         ph = map;
@@ -423,6 +539,10 @@ P3(PUBLIC pascal trap, INTEGER, OpenRFPerm, StringPtr, fn, 	/* IMIV-17 */
   INTEGER retval;
   
   retval = HOpenResFile (vref, 0, fn, perm);
+  fprintf (stderr, "trace: OpenRFPerm name='%.*s' vref=%d perm=%d ref=%d ResErr=%d\n",
+	   fn ? fn[0] : 0, fn ? (char *) fn + 1 : "", vref, perm, retval,
+	   Cx (ResErr));
+  fflush (stderr);
   return retval;
 }
 
@@ -535,6 +655,10 @@ P4 (PUBLIC pascal trap, INTEGER, HOpenResFile, INTEGER, vref, LONGINT, dirid,
 
     invalidate_kchr_ptr ();
 
+    fprintf (stderr, "trace: HOpenResFile begin name='%.*s' vref=%d dirid=%ld perm=%d\n",
+	     fn ? fn[0] : 0, fn ? (char *) fn + 1 : "", vref,
+	     (long) dirid, perm);
+    fflush (stderr);
     ROMlib_setreserr(noErr);
 
     /* check for file already opened */
@@ -551,6 +675,10 @@ P4 (PUBLIC pascal trap, INTEGER, HOpenResFile, INTEGER, vref, LONGINT, dirid,
       if (err)
 	{
 	  ROMlib_setreserr (err);
+	  fprintf (stderr,
+		   "trace: HOpenResFile PBHGetVInfo failed name='%.*s' vref=%d err=%d\n",
+		   fn ? fn[0] : 0, fn ? (char *) fn + 1 : "", vref, err);
+	  fflush (stderr);
 	  return -1;
 	}
 
@@ -585,7 +713,14 @@ P4 (PUBLIC pascal trap, INTEGER, HOpenResFile, INTEGER, vref, LONGINT, dirid,
     pbr.fileParam.ioDirID = CL (dirid);
     ROMlib_setreserr(PBHOpenRF(&pbr, FALSE));
     if (ResErr != noErr)
+      {
+	fprintf (stderr,
+		 "trace: HOpenResFile PBHOpenRF failed name='%.*s' vref=%d dirid=%ld ResErr=%d\n",
+		 fn ? fn[0] : 0, fn ? (char *) fn + 1 : "", vref,
+		 (long) dirid, Cx (ResErr));
+	fflush (stderr);
         return(-1);
+      }
     f = CW(pbr.ioParam.ioRefNum);
     lc = sizeof(hd);
     ROMlib_setreserr(FSReadAll(f, &lc, (Ptr)&hd));
@@ -593,7 +728,7 @@ P4 (PUBLIC pascal trap, INTEGER, HOpenResFile, INTEGER, vref, LONGINT, dirid,
         FSClose(f);
         return(-1);
     }
-    map = (resmaphand) NewHandle(CL(hd.maplen));
+    map = (resmaphand) NewHandleSys(CL(hd.maplen));
     err = MemError();
     if (ROMlib_setreserr(err)) {
         FSClose(f);
@@ -649,6 +784,8 @@ P4 (PUBLIC pascal trap, INTEGER, HOpenResFile, INTEGER, vref, LONGINT, dirid,
     
     HxX(map, nextmap) = TopMapHndl;
     HxX(map, resfn) = CW(f);
+    HLock ((Handle) map);
+    HNoPurge ((Handle) map);
     TopMapHndl = RM((Handle) map);
     CurMap = CW(f);
 
@@ -660,5 +797,8 @@ P4 (PUBLIC pascal trap, INTEGER, HOpenResFile, INTEGER, vref, LONGINT, dirid,
         if (rr->ratr & resPreload)
             ROMlib_mgetres(map, rr);
     EWALKTANDR(tr, rr)
+    fprintf (stderr, "trace: HOpenResFile complete name='%.*s' ref=%d\n",
+	     fn ? fn[0] : 0, fn ? (char *) fn + 1 : "", f);
+    fflush (stderr);
     return(f);
 }

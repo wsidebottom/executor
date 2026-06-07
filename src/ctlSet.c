@@ -19,6 +19,12 @@ char ROMlib_rcsid_ctlSet[] =
 P2(PUBLIC pascal trap, void, SetCtlValue, ControlHandle, c,	/* IMI-326 */
 								  INTEGER, v)
 {
+  if (!c || !STARH (c))
+    {
+      warning_unexpected ("SetCtlValue called with null control");
+      EM_D0 = 0;
+      return;
+    }
   CTL_CALL_EXCURSION
     (c,
      {
@@ -38,12 +44,19 @@ P2(PUBLIC pascal trap, void, SetCtlValue, ControlHandle, c,	/* IMI-326 */
 P1(PUBLIC pascal trap, INTEGER, GetCtlValue,			/* IMI-326 */
 					        ControlHandle, c)
 {
+  if (!c || !STARH (c))
+    return 0;
   return Hx(c, contrlValue);
 }
 
 P2(PUBLIC pascal trap, void, SetCtlMin, ControlHandle, c,	/* IMI-326 */
 								  INTEGER, v)
 {
+  if (!c || !STARH (c))
+    {
+      warning_unexpected ("SetCtlMin called with null control");
+      return;
+    }
   CTL_CALL_EXCURSION
     (c,
      {
@@ -57,12 +70,19 @@ P2(PUBLIC pascal trap, void, SetCtlMin, ControlHandle, c,	/* IMI-326 */
 
 P1(PUBLIC pascal trap, INTEGER, GetCtlMin, ControlHandle, c)	/* IMI-327 */
 {
+    if (!c || !STARH (c))
+      return 0;
     return Hx(c, contrlMin);
 }
 
 P2(PUBLIC pascal trap, void, SetCtlMax, ControlHandle, c,	/* IMI-327 */
 								  INTEGER, v)
 {
+  if (!c || !STARH (c))
+    {
+      warning_unexpected ("SetCtlMax called with null control");
+      return;
+    }
   CTL_CALL_EXCURSION
     (c,
      {
@@ -80,5 +100,7 @@ P2(PUBLIC pascal trap, void, SetCtlMax, ControlHandle, c,	/* IMI-327 */
 
 P1(PUBLIC pascal trap, INTEGER, GetCtlMax, ControlHandle, c)	/* IMI-327 */
 {
+  if (!c || !STARH (c))
+    return 0;
   return Hx(c, contrlMax);
 }

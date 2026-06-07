@@ -31,6 +31,11 @@ P2 (PUBLIC pascal trap, OSErr, SetDialogDefaultItem,    DialogPtr, dialog,
   DialogPeek dp;
 
   dp = (DialogPeek) dialog;
+  if (!dp)
+    {
+      warning_unexpected ("SetDialogDefaultItem called with null dialog");
+      return noErr;
+    }
 
   dp->aDefItem = CW (new_item);
   warning_unimplemented ("no specs");

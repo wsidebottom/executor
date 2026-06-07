@@ -612,20 +612,47 @@ ROMlib_coalesce (block_header_t *block)
   block_header_t *t_block;
   int32 total_free;
   THz current_zone;
+  block_header_t *zone_start, *zone_end;
   
   current_zone = MR (TheZone);
+  zone_start = ZONE_HEAP_DATA (current_zone);
+  zone_end = ZONE_BK_LIM (current_zone);
   
   total_free = 0;
-  for (t_block = block;
-       t_block != ZONE_BK_LIM (current_zone) && USE (t_block) == FREE;
-       t_block = BLOCK_NEXT (t_block))
+  for (t_block = block; t_block != zone_end; t_block = BLOCK_NEXT (t_block))
     {
-      total_free += PSIZE (t_block);
-      if (PSIZE (t_block) < MIN_BLOCK_SIZE)
-	HEAP_DEATH ();
+      int32 psize;
+
+      if (t_block < zone_start || t_block > zone_end)
+	{
+	  fprintf (stderr,
+		   "trace: ROMlib_coalesce stopping outside zone block=%p t=%p zone=(%p,%p) total=%ld\n",
+		   block, t_block, zone_start, zone_end, (long) total_free);
+	  fflush (stderr);
+	  break;
+	}
+
+      psize = PSIZE (t_block);
+      if (psize < MIN_BLOCK_SIZE
+	  || (psize & 3)
+	  || (char *) t_block + psize > (char *) zone_end)
+	{
+	  fprintf (stderr,
+		   "trace: ROMlib_coalesce stopping bad block=%p t=%p psize=%ld use=%d zone=(%p,%p) total=%ld\n",
+		   block, t_block, (long) psize, USE (t_block),
+		   zone_start, zone_end, (long) total_free);
+	  fflush (stderr);
+	  break;
+	}
+
+      if (USE (t_block) != FREE)
+	break;
+
+      total_free += psize;
     }
   
-  BLOCK_SET_PSIZE (block, total_free);
+  if (total_free)
+    BLOCK_SET_PSIZE (block, total_free);
   
   if (ZONE_ALLOC_PTR (current_zone) >= block
       && (char *) ZONE_ALLOC_PTR (current_zone) <= (char *) block + total_free)

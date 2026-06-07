@@ -21,6 +21,11 @@ char ROMlib_rcsid_ctlSize[] =
 P3(PUBLIC pascal trap, void, MoveControl, ControlHandle, c,	/* IMI-325 */
 						      INTEGER, h, INTEGER, v)
 {
+    if (!c || !STARH (c))
+      {
+	warning_unexpected ("MoveControl called with null control");
+	return;
+      }
     if (Hx(c, contrlVis)) {
         HideControl(c);
         HxX(c, contrlRect.right)  = CW(Hx(c, contrlRect.right)
@@ -67,6 +72,11 @@ P5(PUBLIC pascal trap, void, DragControl, ControlHandle, c,	/* IMI-325 */
 P3(PUBLIC pascal trap, void, SizeControl, ControlHandle, c,	/* IMI-326 */
 					     INTEGER, width, INTEGER, height)
 {
+    if (!c || !STARH (c))
+      {
+	warning_unexpected ("SizeControl called with null control");
+	return;
+      }
     if (Hx(c, contrlVis)) {
         HideControl(c);
         HxX(c, contrlRect.right)  = CW(Hx(c, contrlRect.left) + width);

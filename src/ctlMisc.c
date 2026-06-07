@@ -187,10 +187,34 @@ ROMlib_ctlcall (ControlHandle c, int16 i, int32 l)
       break;
     }
   
+  if (!c || !STARH (c))
+    {
+      fprintf (stderr,
+	       "trace: ROMlib_ctlcall missing control c=%p msg=%d trap=0x%04x\n",
+	       (void *) c, i, (unsigned) mostrecenttrap);
+      fflush (stderr);
+      return 0;
+    }
   defproc = CTL_DEFPROC (c);
+  if (!defproc)
+    {
+      fprintf (stderr,
+	       "trace: ROMlib_ctlcall missing defproc c=%p msg=%d trap=0x%04x\n",
+	       (void *) c, i, (unsigned) mostrecenttrap);
+      fflush (stderr);
+      return 0;
+    }
   
   if (defproc->p == NULL)
     LoadResource (defproc);
+  if (!STARH (defproc))
+    {
+      fprintf (stderr,
+	       "trace: ROMlib_ctlcall empty defproc c=%p defproc=%p msg=%d trap=0x%04x\n",
+	       (void *) c, (void *) defproc, i, (unsigned) mostrecenttrap);
+      fflush (stderr);
+      return 0;
+    }
   
   cp = (ctlfuncp) STARH (defproc);
   

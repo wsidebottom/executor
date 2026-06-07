@@ -252,7 +252,7 @@ ROMlib_CALLTXMEAS (INTEGER bc, Ptr bufp, Point * nump, Point * denp,
   pascal trap INTEGER (*pp) (INTEGER, Ptr, Point *, Point *, FontInfo *);
   INTEGER retval;
 
-  if ((gp = MR (thePort->grafProcs))
+  if (thePort && (gp = MR (thePort->grafProcs))
       && (pp = MR (gp->txMeasProc)) != P_StdTxMeas)
     {
       ROMlib_hook (q_txmeasprocnumber);

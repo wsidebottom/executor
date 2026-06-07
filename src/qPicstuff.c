@@ -311,6 +311,7 @@ A1(PRIVATE, void, fillrgn, RgnHandle, r)
 }
 
 PRIVATE RgnHandle saveclip;
+PRIVATE GrafPort *draw_picture_saved_port;
 
 A2 (PRIVATE, void, origin, INTEGER, dh, INTEGER, dv)
 {
@@ -1480,6 +1481,8 @@ P2(PUBLIC pascal trap, void, DrawPicture, PicHandle, pic, Rect *, destrp)
     PixPatHandle junk_pen_pixpat, junk_bk_pixpat, junk_fill_pixpat;
     BOOLEAN saveFractEnable, saveFScaleDisable;
     Byte saveHiliteMode;
+    Size pic_handle_size;
+    INTEGER pic_size;
 
 #if 0
     fprintf (stderr, "DrawPicture (%d): %d\n", debugnumber,
@@ -1512,6 +1515,19 @@ P2(PUBLIC pascal trap, void, DrawPicture, PicHandle, pic, Rect *, destrp)
 #else
     if (!pic || !pic->p || EmptyRect(destrp) || EmptyRect(&HxX(pic, picFrame)))
       return;
+    pic_handle_size = GetHandleSize ((Handle) pic);
+    pic_size = Hx (pic, picSize);
+    if (pic_handle_size < (Size) sizeof (Picture)
+	|| pic_size < (INTEGER) sizeof (Picture)
+	|| pic_size > pic_handle_size)
+      {
+	fprintf (stderr,
+		 "trace: DrawPicture skipping invalid picture pic=%p pic_size=%d handle_size=%ld trap=0x%04x\n",
+		 (void *) pic, pic_size, (long) pic_handle_size,
+		 (unsigned) mostrecenttrap);
+	fflush (stderr);
+	return;
+      }
 #endif
 
 
@@ -1521,6 +1537,7 @@ P2(PUBLIC pascal trap, void, DrawPicture, PicHandle, pic, Rect *, destrp)
     saveFScaleDisable = FScaleDisable;
     begin_assoc ();
     the_port = thePort;
+    draw_picture_saved_port = the_port;
     if (CGrafPort_p (the_port))
       the_cport = theCPort;
     else
@@ -2057,6 +2074,19 @@ P2(PUBLIC pascal trap, void, DrawPicture, PicHandle, pic, Rect *, destrp)
     HSetState((Handle) pic, state);
     if (hand)
 	DisposHandle(hand);
+    if ((unsigned long) the_port < 0x10000
+	|| the_port != draw_picture_saved_port)
+      {
+	fprintf (stderr,
+		 "trace: DrawPicture recovered corrupted port local saved=%p static=%p current=%p trap=0x%04x\n",
+		 (void *) the_port, (void *) draw_picture_saved_port,
+		 (void *) thePort,
+		 (unsigned) mostrecenttrap);
+	fflush (stderr);
+	the_port = draw_picture_saved_port;
+	SetPort ((GrafPtr) the_port);
+	the_cport = CGrafPort_p (the_port) ? theCPort : NULL;
+      }
     if (CGrafPort_p (the_port))
       {
  	DisposPixPat (CPORT_PEN_PIXPAT (the_cport));

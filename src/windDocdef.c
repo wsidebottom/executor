@@ -137,6 +137,15 @@ validate_colors_for_window (GrafPtr w)
       int w_ctab_size;
       
       w_ctab = HxP (t_aux_w, awCTable);
+      if (!w_ctab || !STARH (w_ctab))
+	{
+	  fprintf (stderr,
+		   "trace: validate_colors_for_window empty color table w=%p aux=%p ctab=%p trap=0x%04x\n",
+		   (void *) w, (void *) t_aux_w, (void *) w_ctab,
+		   (unsigned) mostrecenttrap);
+	  fflush (stderr);
+	  goto skip_window_ctab;
+	}
       w_ctab_table = CTAB_TABLE (w_ctab);
       /* this window definition function uses only the first 12
 	 entries in the window color table */
@@ -183,6 +192,7 @@ validate_colors_for_window (GrafPtr w)
 	    }
 	}
     }
+skip_window_ctab:
 
   bw_window_colors[wContentColor] = color_window_colors[wContentColor];
   

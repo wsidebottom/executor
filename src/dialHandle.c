@@ -480,7 +480,17 @@ dialog_draw_item (DialogPtr dp, itmp itemp, int itemno)
     }
   else if (itemp->itmtype & picItem)
     {
+#if defined (CYGWIN32) || defined (__MINGW32__)
+      fprintf (stderr,
+	       "trace: dialog_draw_item skipping picItem handle=%p rect=(%d,%d,%d,%d) trap=0x%04x\n",
+	       (void *) MR (itemp->itmhand),
+	       CW (itemp->itmr.top), CW (itemp->itmr.left),
+	       CW (itemp->itmr.bottom), CW (itemp->itmr.right),
+	       (unsigned) mostrecenttrap);
+      fflush (stderr);
+#else
       DrawPicture ((PicHandle) MR (itemp->itmhand), &itemp->itmr);
+#endif
     }
   else
     {
@@ -545,18 +555,27 @@ P2(PUBLIC pascal trap, void, UpdtDialog, DialogPtr, dp,		/* IMIV-60 */
     itmp ip;
     GrafPtr gp;
     SignedByte state;
+    BOOLEAN draw_all_p;
     
     gp = thePort;
     SetPort((GrafPtr) dp);
     ShowWindow((WindowPtr) dp);
     DrawControls((WindowPtr) dp);
+    draw_all_p = !rgn || !STARH (rgn);
+    if (draw_all_p)
+      {
+	fprintf (stderr,
+		 "trace: UpdtDialog drawing all items for empty update region rgn=%p\n",
+		 (void *) rgn);
+	fflush (stderr);
+      }
     state = HGetState(MR(((DialogPeek)dp)->items));
     HSetState(MR(((DialogPeek)dp)->items), state | LOCKBIT);
     intp = (INTEGER *) STARH(MR(((DialogPeek)dp)->items));
     ip = (itmp)(intp + 1);
     for (i = Cx (*intp), inum = 1; i-- >= 0; inum++, BUMPIP(ip))
       {
-	if (RectInRgn(&ip->itmr, rgn))
+	if (draw_all_p || RectInRgn(&ip->itmr, rgn))
 	  {
 	    dialog_draw_item (dp, ip, inum);
 	  }

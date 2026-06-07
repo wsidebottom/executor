@@ -42,6 +42,10 @@ P2 (PUBLIC pascal trap, TEHandle, TENew, Rect *, dst, Rect *, view)
   tehiddenh temptehiddenh;
   int16 *tehlinestarts;
   int te_size;
+  INTEGER tx_font;
+  Style tx_face;
+  INTEGER tx_mode;
+  INTEGER tx_size;
   
   te_size = ((sizeof (TERec)
 	      - sizeof TE_LINE_STARTS (teh))
@@ -50,6 +54,20 @@ P2 (PUBLIC pascal trap, TEHandle, TENew, Rect *, dst, Rect *, view)
 
   hText = RM (NewHandle (0));
   GetFontInfo (&finfo);
+  if (thePort)
+    {
+      tx_font = PORT_TX_FONT_X (thePort);
+      tx_face = PORT_TX_FACE (thePort);
+      tx_mode = PORT_TX_MODE_X (thePort);
+      tx_size = PORT_TX_SIZE_X (thePort);
+    }
+  else
+    {
+      tx_font = CWC (systemFont);
+      tx_face = 0;
+      tx_mode = CWC (srcOr);
+      tx_size = CWC (12);
+    }
   /* zero the te record */
   memset (STARH (teh), 0, te_size);
   /* ### find out what to assign to the `selRect', `selPoint'
@@ -68,10 +86,10 @@ P2 (PUBLIC pascal trap, TEHandle, TENew, Rect *, dst, Rect *, view)
      crOnly, CWC (1),
      clikLoop, (ProcPtr) RM (&default_clik_loop[0]),
      inPort, thePortX,
-     txFont, PORT_TX_FONT_X (thePort),
-     txFace, PORT_TX_FACE (thePort),
-     txMode, PORT_TX_MODE_X (thePort),
-     txSize, PORT_TX_SIZE_X (thePort),
+     txFont, tx_font,
+     txFace, tx_face,
+     txMode, tx_mode,
+     txSize, tx_size,
      hText, hText);
   
   tehlinestarts = HxX (teh, lineStarts);

@@ -204,8 +204,13 @@ ROMlib_copy_handle (Handle src)
   Handle retval;
   int handle_size;
 
+  if (!src || !STARH (src))
+    return NULL;
+
   handle_size = GetHandleSize (src);
   retval = NewHandle (handle_size);
+  if (!retval || !STARH (retval))
+    return NULL;
   BlockMove (STARH (src), STARH (retval),
 	     handle_size);
   return retval;

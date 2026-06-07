@@ -38,6 +38,14 @@ ROMlib_sledgehammer_rgn (RgnHandle rgn)
   int16 *ip, *start_ip;
   
   gui_assert (rgn);
+  if (!STARH (rgn))
+    {
+      fprintf (stderr,
+	       "trace: ROMlib_sledgehammer_rgn empty handle rgn=%p trap=0x%04x\n",
+	       (void *) rgn, (unsigned) mostrecenttrap);
+      fflush (stderr);
+      return;
+    }
   
   if (RGN_SMALL_P (rgn))
     return;
@@ -1142,6 +1150,19 @@ P3(PUBLIC pascal trap, void, SectRgn, RgnHandle, s1, RgnHandle, s2,
 {
   Rect dummy;
   const Region *rp1, *rp2;
+
+  if (!s1 || !STARH (s1) || !s2 || !STARH (s2))
+    {
+      fprintf (stderr,
+	       "trace: SectRgn empty source s1=%p s1p=%p s2=%p s2p=%p dest=%p trap=0x%04x\n",
+	       (void *) s1, s1 ? (void *) STARH (s1) : NULL,
+	       (void *) s2, s2 ? (void *) STARH (s2) : NULL,
+	       (void *) dest, (unsigned) mostrecenttrap);
+      fflush (stderr);
+      if (dest && STARH (dest))
+	SetEmptyRgn (dest);
+      return;
+    }
   
   RGN_SLAM (s1);
   RGN_SLAM (s2);

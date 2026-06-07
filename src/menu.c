@@ -776,7 +776,13 @@ P1(PUBLIC pascal trap, Handle, GetNewMBar, INTEGER, mbarid)
     MenuHandle mh;
     Handle retval;
     
+    fprintf (stderr, "trace: GetNewMBar id=%d CurMap=%d\n",
+	     mbarid, Cx (CurMap));
+    fflush (stderr);
     mb = (mbarhandle) GetResource(TICK("MBAR"), mbarid);
+    fprintf (stderr, "trace: GetNewMBar resource id=%d handle=%p\n",
+	     mbarid, (void *) mb);
+    fflush (stderr);
     if (!mb)
       retval = 0;
     else
@@ -1670,8 +1676,21 @@ ROMlib_mbdfcall (INTEGER msg, INTEGER param1, LONGINT param2)
   Handle defproc;
   int32 retval;
   mbdfprocp mp;
+  mlhandle menulist;
+  int mbdf_flags;
 
   defproc = MR (MBDFHndl);
+  menulist = MENULIST;
+  if (menulist && STARH (menulist))
+    mbdf_flags = Hx (menulist, mufu) & 7;
+  else
+    {
+      fprintf (stderr,
+	       "trace: ROMlib_mbdfcall missing MenuList handle=%p msg=%d\n",
+	       (void *) menulist, msg);
+      fflush (stderr);
+      mbdf_flags = 0;
+    }
 
   switch (msg)
     {
@@ -1691,7 +1710,7 @@ ROMlib_mbdfcall (INTEGER msg, INTEGER param1, LONGINT param2)
 	   msg, (void *) defproc, (void *) mp, (void *) P_mbdf0, (void *) C_mbdf0);
   fflush (stderr);
   
-  if (mp == P_mbdf0 || Hx (MENULIST, mufu) == 0
+  if (mp == P_mbdf0 || mbdf_flags == 0
 #if defined (CYGWIN32) || defined (__MINGW32__)
       || TRUE
 #endif
@@ -1699,7 +1718,7 @@ ROMlib_mbdfcall (INTEGER msg, INTEGER param1, LONGINT param2)
     {
       fprintf (stderr, "trace: ROMlib_mbdfcall native begin\n");
       fflush (stderr);
-      retval = C_mbdf0 ((Hx (MENULIST, mufu) & 7), msg, param1, param2);
+      retval = C_mbdf0 (mbdf_flags, msg, param1, param2);
       fprintf (stderr, "trace: ROMlib_mbdfcall native complete retval=%ld\n", (long) retval);
       fflush (stderr);
     }
@@ -1712,7 +1731,7 @@ ROMlib_mbdfcall (INTEGER msg, INTEGER param1, LONGINT param2)
 	(defproc,
 	 {
 	   retval = CToPascalCall (STARH (defproc),
-				   CTOP_mbdf0, (Hx (MENULIST, mufu) & 7), msg,
+				   CTOP_mbdf0, mbdf_flags, msg,
 				   param1, param2);
 	 });
       fprintf (stderr, "trace: ROMlib_mbdfcall emulated complete retval=%ld\n", (long) retval);

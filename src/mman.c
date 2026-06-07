@@ -157,7 +157,6 @@ HSetState (Handle h, SignedByte flags)
       SET_MEM_ERR (memWZErr);
       return;
     }
-  
   SET_HANDLE_STATE (h, block, flags);
   MM_SLAM ("exit");
   SET_MEM_ERR (noErr);
@@ -232,7 +231,6 @@ HPurge (Handle h)
       SET_MEM_ERR (memWZErr);
       return;
     }
-
   SET_HANDLE_STATE (h, block, HANDLE_STATE (h, block) | PURGEBIT);
   MM_SLAM ("exit");
   SET_MEM_ERR (noErr);
@@ -829,7 +827,7 @@ DisposHandle (Handle h)
 	      return;
 	    }
 
-	  if (HANDLE_STATE (h, block) & RSRCBIT)
+      if (HANDLE_STATE (h, block) & RSRCBIT)
 	    {
 	      if (h == (Handle) ROMlib_phoney_name_string)
 		{
@@ -838,7 +836,6 @@ DisposHandle (Handle h)
 		}
 	      warning_unexpected ("disposing resource handle");
 	    }
-	  
 	  ROMlib_freeblock (block);
 	}
       
@@ -2022,7 +2019,6 @@ EmptyHandle (Handle h)
       SET_MEM_ERR (memWZErr);
       return;
     }
-
   if (ZONE_PURGE_PROC_X (current_zone))
     {
       uint32 saved0, saved1, saved2, savea0, savea1;

@@ -42,7 +42,12 @@ A3 (PUBLIC, itmp, ROMlib_dpnotoip, DialogPeek, dp,		/* INTERNAL */
   INTEGER *intp;
   itmp retval;
   
+  *flags = 0;
+  if (!dp)
+    return 0;
   items = DIALOG_ITEMS (dp);
+  if (!items || !STARH (items))
+    return 0;
   *flags = hlock_return_orig_state (items);
   intp = (INTEGER *) STARH (items);
   if (itemno <= 0 || itemno > CW (*intp) + 1)
@@ -117,7 +122,8 @@ P5(PUBLIC pascal trap, void, GetDItem, DialogPtr, dp,	/* IMI-421 */
 	if (r) /* test on Mac shows r will not be written if 0 */
 	  *r = ip->itmr;
       }
-    HSetState(MR(((DialogPeek) dp)->items), flags);
+    if (dp && ((DialogPeek) dp)->items)
+      HSetState(MR(((DialogPeek) dp)->items), flags);
 }
 
 static void
@@ -274,7 +280,8 @@ P5(PUBLIC pascal trap, void, SetDItem, DialogPtr, dp,		/* IMI-421 */
 	      warning_unexpected (NULL_STRING);
 	  }
       }
-    HSetState(MR(((DialogPeek) dp)->items), flags);
+    if (dp && ((DialogPeek) dp)->items)
+      HSetState(MR(((DialogPeek) dp)->items), flags);
 }
 
 P2(PUBLIC pascal trap, void, GetIText, Handle, item,		/* IMI-422 */
