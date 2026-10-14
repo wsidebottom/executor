@@ -81,5 +81,14 @@ extern const char *apple_double_fork_prefix;
 extern int apple_double_fork_prefix_length;
 
 extern void double_dir_op (char *name, double_dir_op_t op);
+extern char *ROMlib_sidecar_name (const char *pathname, const char *filename);
+extern char *ROMlib_sidecar_resource_name (const char *metadata);
+extern char *ROMlib_sidecar_rename_name (const char *source,
+                                       const char *pathname,
+                                       const char *filename);
+extern boolean_t ROMlib_basilisk_sidecar_p (const char *name);
+extern boolean_t ROMlib_resource_fork_present (LONGINT fd);
+extern int ROMlib_sidecar_move (char *source, char *target);
+extern int ROMlib_sidecar_delete (char *metadata);
 
 #endif

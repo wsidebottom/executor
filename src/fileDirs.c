@@ -112,17 +112,12 @@ A6(PUBLIC, OSErr, ROMlib_PBMoveOrRename, ParmBlkPtr, pb,	/* INTERNAL */
 		    ROMlib_dbm_store(vcbp, fullnewname, &dirid, TRUE);
 		    rname = ROMlib_resname(oldpathname, oldfilename,
 								   oldendname);
-		    if (Ustat(rname, &sbuf) != -1) {
-			if (op == CatMove) {
-			    newfilename = strrchr(fullnewname, '/') + 1;
-			    newendname = fullnewname + strlen(fullnewname) + 1;
-			}
-			rnew = ROMlib_resname(fullnewname, newfilename,
-								   newendname);
-			double_dir_op (rnew, mkdir_op);
-			renamefailed = Urename(rname, rnew);
-			double_dir_op (rname, rmdir_op);
+		    if (op == CatMove) {
+		        newfilename = strrchr(fullnewname, '/') + 1;
+		        newendname = fullnewname + strlen(fullnewname) + 1;
 		    }
+		    rnew = ROMlib_sidecar_rename_name (rname, fullnewname, newfilename);
+		    renamefailed = ROMlib_sidecar_move (rname, rnew);
 /* TODO: eventually put a call to ROMlib_fcbrename here, but that requires
    us to know the parent id number, something we don't know right now. */
 		}

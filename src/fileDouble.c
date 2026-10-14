@@ -110,6 +110,158 @@ PRIVATE void initialize_ourdefault( void )
 
 PRIVATE defaultentries_t ourentries;
 
+/* Detect the conventions per directory; mounted host volumes can mix them.
+ * As in HFVExplorer, prefer Netatalk, then Basilisk/SheepShaver, then OS X.
+ */
+PRIVATE char *
+sidecar_path (const char *pathname, const char *filename, const char *prefix)
+{
+  size_t parent = filename - pathname;
+  char *result = malloc (parent + strlen (prefix) + strlen (filename) + 1);
+  if (result)
+    {
+      memcpy (result, pathname, parent);
+      sprintf (result + parent, "%s%s", prefix, filename);
+    }
+  return result;
+}
+
+PRIVATE boolean_t
+sidecar_exists (const char *name, boolean_t directory)
+{
+  struct stat sb;
+  return name && Ustat (name, &sb) == 0
+    && (directory ? S_ISDIR (sb.st_mode) : S_ISREG (sb.st_mode));
+}
+
+PRIVATE boolean_t
+appledouble_file_p (const char *name)
+{
+  Single_header header;
+  int fd = Uopen (name, O_BINARY|O_RDONLY, 0);
+  boolean_t result = fd >= 0
+    && read (fd, &header, sizeof (header)) == sizeof (header)
+    && header.magic == CLC (DOUBLEMAGIC);
+  if (fd >= 0)
+    Uclose (fd);
+  return result;
+}
+
+PUBLIC boolean_t
+ROMlib_basilisk_sidecar_p (const char *name)
+{
+  const char *leaf = strrchr (name, '/');
+  return leaf && leaf - name >= 6 && !memcmp (leaf - 6, "/.finf", 6);
+}
+
+PUBLIC char *
+ROMlib_sidecar_resource_name (const char *metadata)
+{
+  char *result = strdup (metadata);
+  if (result && ROMlib_basilisk_sidecar_p (result))
+    memcpy (strrchr (result, '/') - 5, ".rsrc", 5);
+  return result;
+}
+
+PUBLIC char *
+ROMlib_sidecar_rename_name (const char *source, const char *pathname,
+                          const char *filename)
+{
+  const char *leaf = strrchr (source, '/');
+  const char *prefix = apple_double_fork_prefix;
+  if (ROMlib_basilisk_sidecar_p (source))
+    prefix = ".finf/";
+  else if (leaf && leaf - source >= 13
+           && !memcmp (leaf - 13, "/.AppleDouble", 13))
+    prefix = ".AppleDouble/";
+  else if (leaf && !strncmp (leaf + 1, "._", 2))
+    prefix = "._";
+  return sidecar_path (pathname, filename, prefix);
+}
+
+PUBLIC char *
+ROMlib_sidecar_name (const char *pathname, const char *filename)
+{
+  const char *prefixes[] = { ".AppleDouble/", ".finf/", "._" };
+  char *candidate, *directory;
+  int i, style = -1;
+  DIR *dir;
+  struct dirent *entry;
+
+  /* Existing companions take precedence over directory defaults. */
+  for (i = 0; i < 3; ++i)
+    {
+      candidate = sidecar_path (pathname, filename, prefixes[i]);
+      if (sidecar_exists (candidate, FALSE)
+          && (i != 2 || appledouble_file_p (candidate)))
+        return candidate;
+      if (i == 1)
+        {
+          char *resource = ROMlib_sidecar_resource_name (candidate);
+          boolean_t exists = sidecar_exists (resource, FALSE);
+          free (resource);
+          if (exists)
+            return candidate;
+        }
+      free (candidate);
+    }
+  for (i = 0; i < 2; ++i)
+    {
+      directory = sidecar_path (pathname, filename,
+                               i == 0 ? ".AppleDouble" : ".finf");
+      if (directory)
+        directory[(filename - pathname) + (i == 0 ? 12 : 5)] = 0;
+      if (sidecar_exists (directory, TRUE))
+        style = i;
+      free (directory);
+      if (style >= 0)
+        break;
+    }
+  if (style < 0)
+    {
+      directory = sidecar_path (pathname, filename, ".rsrc");
+      if (directory)
+        directory[(filename - pathname) + 5] = 0;
+      if (sidecar_exists (directory, TRUE))
+        style = 1;
+      free (directory);
+    }
+  if (style < 0)
+    {
+      directory = sidecar_path (pathname, filename, "");
+      if (directory)
+        directory[filename - pathname] = 0;
+      dir = directory ? Uopendir (directory) : NULL;
+      if (dir)
+        {
+          while ((entry = readdir (dir)))
+            if (!strcmp (entry->d_name, ".DS_Store"))
+              {
+                style = 2;
+                break;
+              }
+            else if (!strncmp (entry->d_name, "._", 2))
+              {
+                char *probe = sidecar_path (pathname, filename, entry->d_name);
+                boolean_t valid;
+                if (probe)
+                  probe[(filename - pathname) + strlen (entry->d_name)] = 0;
+                valid = probe && appledouble_file_p (probe);
+                free (probe);
+                if (valid)
+                  {
+                    style = 2;
+                    break;
+                  }
+              }
+          closedir (dir);
+        }
+      free (directory);
+    }
+  return sidecar_path (pathname, filename,
+                       style >= 0 ? prefixes[style] : apple_double_fork_prefix);
+}
+
 PUBLIC void
 double_dir_op (char *name, double_dir_op_t op)
 {
@@ -136,13 +288,19 @@ double_dir_op (char *name, double_dir_op_t op)
 
 	    *last_slash = save;
 	    len = strlen (name) + 1 + apple_double_fork_prefix_length + 1;
-	    to_del = alloca (len);
+	    to_del = alloca (len + 16);
 	    sprintf (to_del, "%s/%s", name, apple_double_fork_prefix);
 	    to_unlink = alloca (len + strlen(PARENT_FILE));
 	    sprintf (to_unlink, "%s%s", to_del, PARENT_FILE);
 	    unlink (to_unlink);
 	    to_del[len-2] = 0; /* remove trailing slash */
 	    Urmdir (to_del);
+	    sprintf (to_del, "%s/.finf", name);
+	    Urmdir (to_del);
+	    sprintf (to_del, "%s/.rsrc", name);
+	    Urmdir (to_del);
+	    sprintf (to_del, "%s/.DS_Store", name);
+	    Uunlink (to_del);
 	  }
 	  break;
 	default:
@@ -151,6 +309,46 @@ double_dir_op (char *name, double_dir_op_t op)
 	}
       *last_slash = save;
     }
+}
+
+PUBLIC int
+ROMlib_sidecar_move (char *source, char *target)
+{
+  struct stat sb;
+  int result = 0;
+  if (ROMlib_basilisk_sidecar_p (source))
+    {
+      char *old_resource = ROMlib_sidecar_resource_name (source);
+      char *new_resource = ROMlib_sidecar_resource_name (target);
+      if (Ustat (old_resource, &sb) == 0)
+        {
+          double_dir_op (new_resource, mkdir_op);
+          result = Urename (old_resource, new_resource);
+        }
+      free (old_resource);
+      free (new_resource);
+    }
+  if (!result && Ustat (source, &sb) == 0)
+    {
+      double_dir_op (target, mkdir_op);
+      result = Urename (source, target);
+    }
+  return result;
+}
+
+PUBLIC int
+ROMlib_sidecar_delete (char *metadata)
+{
+  int result;
+  if (ROMlib_basilisk_sidecar_p (metadata))
+    {
+      char *resource = ROMlib_sidecar_resource_name (metadata);
+      result = Uunlink (resource);
+      free (resource);
+      if (result && errno != ENOENT && errno != ENOTDIR)
+        return result;
+    }
+  return Uunlink (metadata);
 }
 
 A3(PUBLIC, OSErr, ROMlib_newresfork, char *, name, LONGINT *, fdp,
@@ -173,6 +371,28 @@ A3(PUBLIC, OSErr, ROMlib_newresfork, char *, name, LONGINT *, fdp,
 	ourentries.finfo.finfo.fdCreator = 0;
       }
     initialize_ourdefault();
+    /* Basilisk stores Finder info as 16 bytes plus two reserved bytes, and
+       its resource fork is an ordinary file starting at offset zero. */
+    if (ROMlib_basilisk_sidecar_p (name) || strstr (name, "/.rsrc/"))
+      {
+        unsigned char finfo[18] = { 0 };
+        double_dir_op (name, mkdir_op);
+        fd = Uopen (name, O_BINARY|O_RDWR|O_CREAT, 0666);
+        if (fd < 0)
+          return ROMlib_maperrno ();
+        if (ROMlib_basilisk_sidecar_p (name))
+          {
+            memcpy (finfo, &ourentries.finfo.finfo, sizeof (FInfo));
+            if (write (fd, finfo, sizeof (finfo)) != sizeof (finfo))
+              {
+                retval = ROMlib_maperrno ();
+                Uclose (fd);
+                return retval;
+              }
+          }
+        *fdp = fd;
+        return noErr;
+      }
     if ((fd = Uopen(name, (O_BINARY|O_RDWR|O_CREAT), 0666L)) < 0 ||
 	     write(fd, (char *) &ourdefault, sizeof(ourdefault))
 						       != sizeof(ourdefault) ||
@@ -207,37 +427,55 @@ A5(PRIVATE, BOOLEAN, getsetentry, GetOrSetType, gors, LONGINT, fd,
     char buf[OURBSIZE];
     BOOLEAN retval;
     INTEGER n;
+    struct stat sbuf;
 
     retval = FALSE;
     saveloc = lseek(fd, 0L, L_INCR);
     lseek(fd, 0L, L_SET);
     nread = read(fd, buf, sizeof(buf));
     dfp = (struct defaulthead *) buf;
-    if (nread >= (int) sizeof(struct defaulthead)
+    if (nread >= (int) sizeof(Single_header)
 	&& (dfp->head.magic == CLC(SINGLEMAGIC)
 	    || dfp->head.magic == CLC(DOUBLEMAGIC)
 	    || dfp->head.magic == SINGLEMAGIC
 	    || dfp->head.magic == DOUBLEMAGIC)) {
-	n = MIN(Cx(dfp->head.nentries),
-		((nread - (int) sizeof(Single_header)) /
-		 (int) sizeof(Single_descriptor)));
+	n = CW (dfp->head.nentries);
+	if (n < 0 || n > (nread - (int) sizeof (Single_header))
+	                 / (int) sizeof (Single_descriptor))
+	  goto finished;
 	for (sdp = dfp->desc; --n >= 0 && Cx(sdp->id) != sid; ++sdp)
 	    ;
 	if (n >= 0) {
+	    ULONGINT offset = CL (sdp->offset), length = CL (sdp->length);
+	    if (offset > 0x7FFFFFFF || length > 0x7FFFFFFF - offset
+	        || offset < sizeof (Single_header)
+	                 + CW (dfp->head.nentries) * sizeof (Single_descriptor)
+	        || fstat (fd, &sbuf) < 0
+	        || (length && (offset > (ULONGINT) sbuf.st_size
+	                       || length > (ULONGINT) sbuf.st_size - offset))
+	        || (sid == Finder_Info_ID && length < sizeof (FInfo)))
+	      goto finished;
 	    switch (gors) {
 	    case Get:
 		*savesdp = *sdp;
-		if (n == 0) {
-		    if (lengthp)
-			*lengthp = 0x7FFFFFFF;	/* unlimited */
-		} else
-		    if (lengthp)
-			*lengthp = CL(sdp[1].offset) - CL(sdp[0].offset);
+		if (lengthp)
+		  {
+		    Single_descriptor *other;
+		    ULONGINT limit = 0x7FFFFFFF;
+		    int count = MIN (CW (dfp->head.nentries),
+		                     (nread - sizeof (Single_header))
+		                     / sizeof (Single_descriptor));
+		    for (other = dfp->desc; count-- > 0; ++other)
+		      if (CL (other->offset) > offset)
+		        limit = MIN (limit, CL (other->offset) - offset);
+		    *lengthp = limit;
+		  }
 		break;
 	    case Set:
 		*sdp = *savesdp;
 		lseek(fd, 0L, L_SET);
-		write(fd, buf, nread);
+		if (write(fd, buf, nread) != nread)
+		  goto finished;
 		break;
 	    default:
 		gui_assert(0);
@@ -246,8 +484,25 @@ A5(PRIVATE, BOOLEAN, getsetentry, GetOrSetType, gors, LONGINT, fd,
 	    retval = TRUE;
 	}
     }
+    else if (sid == Finder_Info_ID && nread >= 18 && nread <= 256
+             && fstat (fd, &sbuf) == 0 && sbuf.st_size == nread)
+      {
+        /* Basilisk/SheepShaver's compact .finf record. */
+        savesdp->id = CLC (Finder_Info_ID);
+        savesdp->offset = 0;
+        savesdp->length = CLC (sizeof (FInfo));
+        retval = gors == Get;
+      }
+finished:
     lseek(fd, saveloc, L_SET);
     return retval;
+}
+
+PUBLIC boolean_t
+ROMlib_resource_fork_present (LONGINT fd)
+{
+  Single_descriptor entry;
+  return getsetentry (Get, fd, Resource_Fork_ID, &entry, NULL);
 }
 
 #define IDWANTED(fp) ((fp->fcflags & fcfisres) ? Resource_Fork_ID : \
@@ -279,6 +534,44 @@ A2(PRIVATE, void, writebyteat, LONGINT, fd, LONGINT, loc)
 
 /* TODO: better error checking */
 
+/* AppleDouble descriptors need not be sorted. When metadata follows the
+ * resource fork, grow it at the end instead of overwriting that metadata.
+ */
+PRIVATE boolean_t
+grow_resource_entry (LONGINT fd, Single_descriptor *entry, ULONGINT length)
+{
+  struct stat sb;
+  unsigned char buffer[8192];
+  ULONGINT copied = 0, old_offset = CL (entry->offset);
+  ULONGINT old_length = CL (entry->length), new_offset;
+  LONGINT position = lseek (fd, 0, L_INCR);
+
+  if (fstat (fd, &sb) < 0 || sb.st_size > 0x7FFFFFFF - length)
+    return FALSE;
+  new_offset = sb.st_size;
+  while (copied < old_length)
+    {
+      ULONGINT amount = MIN (sizeof (buffer), old_length - copied);
+      if (lseek (fd, old_offset + copied, L_SET) < 0
+          || read (fd, buffer, amount) != amount
+          || lseek (fd, new_offset + copied, L_SET) < 0
+          || write (fd, buffer, amount) != amount)
+        goto fail;
+      copied += amount;
+    }
+  if (ftruncate (fd, new_offset + length) < 0)
+    goto fail;
+  entry->offset = CL (new_offset);
+  entry->length = CL (length);
+  if (!getsetentry (Set, fd, Resource_Fork_ID, entry, NULL))
+    goto fail;
+  lseek (fd, new_offset + position - old_offset, L_SET);
+  return TRUE;
+fail:
+  lseek (fd, position, L_SET);
+  return FALSE;
+}
+
 A1(PUBLIC, OSErr, ROMlib_seteof, fcbrec *, fp)	/* INTERNAL */
 {
     ULONGINT leof, peof, curloc;
@@ -295,8 +588,11 @@ A1(PUBLIC, OSErr, ROMlib_seteof, fcbrec *, fp)	/* INTERNAL */
 	idwanted = IDWANTED(fp);
 	if (getsetentry(Get, fd, idwanted, &d, &peof)) {
 	    if (leof > peof) {
-		gui_assert(0);	/* TODO: We need to move stuff around.
-			 	   There are many things we could do */
+		if (idwanted != Resource_Fork_ID
+		    || !grow_resource_entry (fd, &d, leof))
+		  err = ioErr;
+		else
+		  peof = 0x7FFFFFFF;
 	    } else if (leof < peof) {
 		d.length = CL(leof);
 		getsetentry(Set, fd, idwanted, &d, NULL);
@@ -342,6 +638,10 @@ A5(PRIVATE, BOOLEAN, getsetpiece, GetOrSetType, gors, LONGINT, fd,
     BOOLEAN retval;
 
     saveloc = lseek(fd, 0L, L_INCR);
+    /* Compact Finder records must not spill into adjacent entries. */
+    if (gors == Get)
+      memset (bufp, 0, length);
+    length = MIN (length, CL (sdp->length));
     lseek(fd, Cx(sdp->offset), L_SET);
     switch (gors) {
     case Get:
@@ -414,6 +714,12 @@ A8(PUBLIC, OSErr,  ROMlib_hiddenbyname, GetOrSetType, gors,	/* INTERNAL */
     BOOLEAN done;
 
     retval = noErr;
+    memset (&sfinfo, 0, sizeof (sfinfo));
+    if (gors == Get)
+      {
+        memset (finfop, 0, sizeof (*finfop));
+        memset (fxinfop, 0, sizeof (*fxinfop));
+      }
     if (Ustat(pathname, &sbuf) < 0)
 	retval = ROMlib_maperrno();
     else {
@@ -435,6 +741,16 @@ fprintf(stderr, "%s(%d): open '%s' fails\n", __FILE__, __LINE__, rpathname);
 		    memset(fxinfop, 0, sizeof(*fxinfop));
 		    *lenp = CL(sbuf.st_size);
 		    *rlenp = 0;
+		    datep->crdat = CL (UNIXTIMETOMACTIME (MIN (sbuf.st_ctime, sbuf.st_mtime)));
+		    datep->moddat = CL (UNIXTIMETOMACTIME (sbuf.st_mtime));
+		    if (ROMlib_basilisk_sidecar_p (rpathname))
+		      {
+		        char *resource = ROMlib_sidecar_resource_name (rpathname);
+		        struct stat resource_stat;
+		        if (Ustat (resource, &resource_stat) == 0)
+		          *rlenp = CL (resource_stat.st_size);
+		        free (resource);
+		      }
 		    break;
 		case Set:
 		    retval = ROMlib_newresfork(rpathname, &rfd, FALSE);
@@ -450,6 +766,7 @@ fprintf(stderr, "%s(%d): open '%s' fails\n", __FILE__, __LINE__, rpathname);
 	if (!done && retval == noErr) {
 	    switch (gors) {
 	    case Get:
+		*lenp = CL (sbuf.st_size);
 		if (getsetentry(Get, rfd, File_Dates_Info_ID, &d, NULL))
 		  getsetpiece(Get, rfd, &d, (char *) datep, sizeof(*datep));
 		else
@@ -477,6 +794,14 @@ fprintf(stderr, "%s(%d): open '%s' fails\n", __FILE__, __LINE__, rpathname);
 		    *rlenp = d.length;
 		else
 		    *rlenp = 0;
+		if (ROMlib_basilisk_sidecar_p (rpathname))
+		  {
+		    char *resource = ROMlib_sidecar_resource_name (rpathname);
+		    struct stat resource_stat;
+		    *rlenp = resource && Ustat (resource, &resource_stat) == 0
+		      ? CL (resource_stat.st_size) : 0;
+		    free (resource);
+		  }
 		break;
 	    case Set:
 		if (getsetentry(Get, rfd, File_Dates_Info_ID, &d, NULL))

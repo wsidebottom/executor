@@ -1,0 +1,30 @@
+Host sidecar regression tests
+============================
+
+After configuring the Windows build, run in WSL with Windows interop enabled:
+
+  bash executor/tests/run-sidecar-tests.sh
+
+The test compiles the actual fileDouble.c implementation into a Windows
+executable, using CRT filesystem calls in place of Executor's host path
+wrappers. It creates disposable fixtures under the workspace build directory.
+No existing application files are modified.
+
+Coverage: per-file and per-directory Netatalk, BasiliskII/SheepShaver and OS X
+detection; compact 18-byte Finder records; raw resource forks at offset zero;
+16-byte AppleDouble Finder records; unordered descriptors; truncated tables;
+resource growth that preserves following metadata; and preserving the source
+sidecar convention for a rename or move into a different-style directory;
+moving/deleting companion pairs; and removing empty sidecar containers when
+deleting a Macintosh directory.
+
+For integration testing, launch a copy of a Macintosh application whose
+metadata/resource forks are represented as .finf/name plus .rsrc/name, then
+repeat with ._name AppleDouble. Confirm Finder type/creator, resource loading,
+hidden sidecar entries, and no win_exception entries in stderr.txt.
+
+Existing companions are preferred in this order: .AppleDouble/name,
+.finf/name (or .rsrc/name), then ._name. New companions use the containing
+directory's convention, detected from .AppleDouble, .finf/.rsrc, valid ._*
+AppleDouble files, or .DS_Store. Unmarked directories retain Executor's
+configured convention. Renames/moves preserve the individual file's format.

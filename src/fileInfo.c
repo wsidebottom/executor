@@ -311,6 +311,7 @@ A5(PUBLIC, OSErr, ROMlib_PBGetSetFInfoD, ParmBlkPtr, pb,	/* INTERNAL */
     Single_dates dateinfo;
     LONGINT errval;
     INTEGER tozeroout;
+    int metadata_status;
 
     savezone = TheZone;
     TheZone = SysZone;
@@ -463,7 +464,14 @@ A5(PUBLIC, OSErr, ROMlib_PBGetSetFInfoD, ParmBlkPtr, pb,	/* INTERNAL */
 	    }
 		
 	}
-	if (Ustat(rpathname, &resourcesbuf) < 0) {
+	metadata_status = Ustat (rpathname, &resourcesbuf);
+	if (metadata_status < 0 && ROMlib_basilisk_sidecar_p (rpathname))
+	  {
+	    char *resource = ROMlib_sidecar_resource_name (rpathname);
+	    metadata_status = Ustat (resource, &resourcesbuf);
+	    free (resource);
+	  }
+	if (metadata_status < 0) {
 	    pb->fileParam.ioFlRPyLen = 0;
 	    resourcesbuf.st_mtime = 0;
 	    memset(&pb->fileParam.ioFlFndrInfo, 0,

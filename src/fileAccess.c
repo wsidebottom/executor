@@ -350,6 +350,18 @@ PUBLIC BOOLEAN ROMlib_isresourcefork(const char *fullname)
     BOOLEAN retval;
     const char *filename;
 
+    filename = strrchr (fullname, '/');
+    filename = filename ? filename + 1 : fullname;
+    if (!strncmp (filename, "._", 2))
+      {
+        fd = Uopen (fullname, O_BINARY|O_RDONLY, 0);
+        retval = fd >= 0 && read (fd, &magic, sizeof (magic)) == sizeof (magic)
+          && magic == CLC (DOUBLEMAGIC);
+        if (fd >= 0)
+          Uclose (fd);
+        return retval;
+      }
+
     /* netatalk_conventions_p means we never see resource forks, because
        they're stored in a subdirectory */
 
@@ -390,6 +402,9 @@ dislike_name (char *namep)
       || strcmp (namep, "..") == 0
       || strcmp (namep, ".AppleDouble") == 0
       || strcmp (namep, ".AppleDesktop") == 0
+      || strcmp (namep, ".finf") == 0
+      || strcmp (namep, ".rsrc") == 0
+      || strcmp (namep, ".DS_Store") == 0
       || (ROMlib_no_dot_files && namep[0] == '.'))
     retval = TRUE;
   else
@@ -936,15 +951,7 @@ A3(PUBLIC, char *, ROMlib_resname, char *, pathname,		/* INTERNAL */
     pathnamesize = filename - pathname;
     filenamesize = endname - filename;
     if (pathnamesize)
-      {
-	newsize = pathnamesize + filenamesize
-	  + apple_double_fork_prefix_length;
-	newname = malloc (newsize);
-	memcpy (newname, pathname, pathnamesize);
-	strcpy (&newname[pathnamesize], apple_double_fork_prefix);
-	memcpy (newname + pathnamesize + apple_double_fork_prefix_length,
-		filename, filenamesize);
-      }
+      newname = ROMlib_sidecar_name (pathname, filename);
     else
       {
 	/* "E:/" --> "E:/%%2F" */
@@ -1144,6 +1151,11 @@ A4(PRIVATE, OSErr, PBOpenForkD, ParmBlkPtr, pb, BOOLEAN, a,
 		filename[save_index] = save_char;
 		if (fork == ResourceFork) {
 		    newname = ROMlib_resname(pathname, filename, endname);
+		    {
+		      char *resource = ROMlib_sidecar_resource_name (newname);
+		      free (newname);
+		      newname = resource;
+		    }
 		    temp = Ustat(newname, &sbuf);
 		    if (temp < 0 && errno != ENOENT)
 			err = ioErr;
@@ -1187,6 +1199,18 @@ A4(PRIVATE, OSErr, PBOpenForkD, ParmBlkPtr, pb, BOOLEAN, a,
 		      {
 			fp->fcflags |= fcfisres;
 			fp->hiddenfd = fp->fcfd;
+			newname = ROMlib_resname (need_to_free, filename, endname);
+			if (ROMlib_basilisk_sidecar_p (newname))
+			  fp->hiddenfd = Uopen (newname, O_BINARY|O_RDONLY, 0);
+			else if (!ROMlib_resource_fork_present (fp->fcfd))
+			  {
+			    Uclose (fp->fcfd);
+			    freeprn (fp);
+			    free (newname);
+			    err = fnfErr;
+			    goto openfork_done;
+			  }
+			free (newname);
 			lseek(fp->fcfd, ROMlib_FORKOFFSET(fp), L_SET);
 		      }
 		    else
@@ -1232,6 +1256,7 @@ A4(PRIVATE, OSErr, PBOpenForkD, ParmBlkPtr, pb, BOOLEAN, a,
 	}
     }
 
+openfork_done:
     if (need_to_free)
       free (need_to_free);
 
@@ -1323,7 +1348,7 @@ pbfpos (ParmBlkPtr pb, LONGINT *toseekp, boolean_t can_go_past_eof)
 {
     OSErr err;
     LONGINT leof;
-    INTEGER forkoffset;
+    LONGINT forkoffset;
     LONGINT pos;
     int fd;
     fcbrec *fp;
@@ -1454,7 +1479,7 @@ PRIVATE OSErr
 pbsetfpos (ParmBlkPtr pb, boolean_t can_go_past_eof)
 {
     OSErr err;
-    INTEGER forkoffset;
+    LONGINT forkoffset;
     LONGINT toseek;
     int fd;
     fcbrec *fp;
@@ -1510,7 +1535,7 @@ A2(PUBLIC, OSErr, ufsPBRead, ParmBlkPtr, pb, BOOLEAN, a) /* INTERNAL */
 {
     OSErr err;
     LONGINT nread;
-    INTEGER forkoffset;
+    LONGINT forkoffset;
     fcbrec *fp;
 
 #if 0
@@ -1573,7 +1598,7 @@ A2(PUBLIC, OSErr, ufsPBWrite, ParmBlkPtr, pb, BOOLEAN, a) /* INTERNAL */
 {
     OSErr err;
     LONGINT nwrite, rc;
-    INTEGER forkoffset;
+    LONGINT forkoffset;
     fcbrec *fp;
 
     if (Cx(pb->ioParam.ioRefNum) < 0)
@@ -1630,7 +1655,7 @@ A2(PUBLIC, OSErr, ufsPBGetFPos, ParmBlkPtr, pb,		/* INTERNAL */
 								   BOOLEAN, a)
 {
     OSErr err;
-    INTEGER forkoffset;
+    LONGINT forkoffset;
     fcbrec *fp;
 
     fp = PRNTOFPERR(Cx(pb->ioParam.ioRefNum), &err);

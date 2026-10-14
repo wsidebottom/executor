@@ -175,7 +175,7 @@ A4(PRIVATE, OSErr, PBDeleteForD, ParmBlkPtr, pb, BOOLEAN, a,
 				      (err = volumenotlocked(vcbp)) == noErr) {
 
 	rpathname = ROMlib_resname(pathname, filename, endname);
-	deletefailed = Uunlink(rpathname);
+	deletefailed = ROMlib_sidecar_delete (rpathname);
 	if (netatalk_conventions_p)
 	  double_dir_op (pathname, rmdir_op);
 	if (!deletefailed || errno == ENOTDIR || errno == ENOENT)
