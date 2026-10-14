@@ -9,11 +9,13 @@
 
 #include "rsys/common.h"
 
+#if defined (__MINGW32__)
+#include <semaphore.h>
+#else
 #include <sys/ipc.h>
 #include <sys/sem.h>
-#include <sys/ioctl.h>
+#endif
 #include <signal.h>
-#include <sys/socket.h>
 #include <sched.h>
 #include <pthread.h>
 
@@ -36,7 +38,11 @@ static int num_samples;
 
 #define BUFSIZE (1 << (LOGBUFSIZE+1)) /* +1 as bug workaround */
 
+#if defined (__MINGW32__)
+static sem_t semid;
+#else
 static int semid = -1;  /* Semaphore id */
+#endif
 static int sound_on = 0; /* 1 if we are generating interrupts */
 static boolean_t have_sound_p; /* TRUE if sound is supported */
 
@@ -67,6 +73,13 @@ PUBLIC int ROMlib_SND_RATE =
 static void
 patl_wait (void)
 {
+#if defined (__MINGW32__)
+  while (sem_wait (&semid) < 0)
+    {
+      if (errno != EINTR)
+	gui_fatal ("Semaphore wait failure");
+    }
+#else
   struct sembuf op_wait[] = {
     { 0, -1, 0 } };
 
@@ -78,6 +91,7 @@ patl_wait (void)
 	perror ("semop failed");
       pthread_exit (NULL);
     }
+#endif
 }
 
 /* Signal the semaphore (atomic increment) */
@@ -85,6 +99,10 @@ patl_wait (void)
 static void
 patl_signal (void)
 {
+#if defined (__MINGW32__)
+  if (sem_post (&semid) < 0)
+    gui_fatal ("Signal failure");
+#else
   struct sembuf op_signal[] = {
     { 0, 1, 0 } };
 
@@ -94,6 +112,7 @@ patl_signal (void)
 	continue;
       gui_fatal ("Signal failure");
     }
+#endif
 }
 
 static snd_time t1 = 0;
@@ -184,7 +203,7 @@ sound_sdl_hunger_finish (sound_driver_t *s)
   patl_signal ();
 }
 
-#if defined (_SEM_SEMUN_UNDEFINED)
+#if !defined (__MINGW32__) && defined (_SEM_SEMUN_UNDEFINED)
 union semun
 {
   int unused_baggage;
@@ -194,8 +213,12 @@ union semun
 static void
 sound_sdl_shutdown (sound_driver_t *s)
 {
+#if defined (__MINGW32__)
+  sem_destroy (&semid);
+#else
   if (semid >= 0)
     semctl (semid, 0, IPC_RMID, (union semun)0);
+#endif
 
   if (have_sound_p)
     {
@@ -359,12 +382,17 @@ sound_sdl_init (sound_driver_t *s)
   memset (buf, 0x80, sizeof (buf));
   sdl_write (buf, num_samples);
 
+#if defined (__MINGW32__)
+  if (sem_init (&semid, 0, 0) < 0)
+    gui_fatal ("Couldn't create sound semaphore.");
+#else
   semid = semget (IPC_PRIVATE, 1, IPC_CREAT | IPC_EXCL | 0666);
   if (semid < 0)
     gui_fatal ("Couldn't get semaphore.  Kernel needs to have System V IPC "
 	       "compiled in (CONFIG_SYSVIPC).  "
 	       "Until you recompile your kernel, try using the "
 	       "\"-nosound\" command line option.");
+#endif
 
   atexit (sound_sdl_shutdown_at_exit); /* make sure semid gets freed */
 
@@ -372,15 +400,21 @@ sound_sdl_init (sound_driver_t *s)
   *(syn68k_addr_t *) SYN68K_TO_US(M68K_SOUND_VECTOR * 4) = CL (my_callback);
 
   {
+#if !defined (__MINGW32__)
     sigset_t all_signals, current_mask;
+#endif
     pthread_t thread;
 
+#if !defined (__MINGW32__)
     sigfillset (&all_signals);
     sigdelset (&all_signals, SIGIO);
     sigprocmask (SIG_SETMASK, &all_signals, &current_mask);
+#endif
     //    fprintf (stderr, "about to start thread\n");
     sysret = pthread_create (&thread, NULL, loop, NULL);
+#if !defined (__MINGW32__)
     sigprocmask (SIG_SETMASK, &current_mask, 0);
+#endif
   }
   if (sysret != 0)
     goto fail;

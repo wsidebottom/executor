@@ -12,7 +12,7 @@ typedef struct PACKED {
     INTEGER version;
     INTEGER tableno[256];
     INTEGER ntables;
-    Byte table[1][128];	/* who knows how many */
+    uint8 table[1][128];	/* who knows how many */
 } keymap;
 
 extern void dofloppymount (void);

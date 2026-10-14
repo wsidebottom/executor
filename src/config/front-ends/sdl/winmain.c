@@ -19,6 +19,10 @@
 
 #include <windows.h>
 
+#if !defined (STDCALL)
+#define STDCALL __stdcall
+#endif
+
 #include "paramline.h"
 
 #include "SDL/SDL.h"

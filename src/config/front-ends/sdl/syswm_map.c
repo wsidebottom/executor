@@ -46,6 +46,7 @@ os_current_screen_height (void)
 #include "win_screen.h"
 
 HWND SDL_Window;
+HWND Win_Window;
 
 
 
@@ -81,7 +82,7 @@ sdl_syswm_init(void)
 
 #elif defined(_WIN32)
 /* * */
-      SDL_Window = info.window;
+      Win_Window = SDL_Window = info.window;
 
 #endif /* OS */
       retval = 0;

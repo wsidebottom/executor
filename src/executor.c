@@ -411,7 +411,9 @@ PUBLIC syn68k_addr_t alinehandler(syn68k_addr_t pc, void *ignored)
     retval = pc + 2;
     ++trap_count;
 #if defined (CYGWIN32)
+#if !defined (vdriver_system_busy) || vdriver_system_busy
     vdriver_system_busy (TRUE);
+#endif
 #endif
     if (trap_count <= 200
 	|| (trap_count >= 1400 && trap_count <= 1800)

@@ -682,7 +682,7 @@ os_sources = config/os/cygwin32/cygwin32.c          \
 	     config/os/cygwin32/winfs.h
 
 bin_PROGRAMS += exemove
-exemove_SOURCES = config/os/cygwin32/exemove.c
+exemove_SOURCES = config/os/cygwin32/exemove.c paramline.c
 endif CONFIG_OS_CYGWIN32
 
 
@@ -755,4 +755,3 @@ install-data-hook:
 uninstall-hook:
 	find "$(pkgdatadir)/skel" -type d -print0 | xargs -0 chmod u+w
 	rm -rf "$(pkgdatadir)/skel"
-

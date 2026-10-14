@@ -161,7 +161,8 @@ AM_CONDITIONAL([CONFIG_HOST_I486_LINUX], [false])
 AM_CONDITIONAL([CONFIG_HOST_I486_NEXT_NS3], [test x$host_os = xnext -a x$host_cpu = xi386])
 AM_CONDITIONAL([CONFIG_HOST_M68K_NEXT_NS3], [test x$host_os = xnext -a x$host_cpu = xm68k])
 
-AM_CONDITIONAL([CONFIG_OS_CYGWIN32], [test x$host_os = xcygwin32])
+AM_CONDITIONAL([CONFIG_OS_CYGWIN32],
+               [test x$host_os = xcygwin32 -o x$host_os = xmingw32])
 AM_CONDITIONAL([CONFIG_OS_LINUX], [test x$host_os = xlinux])
 AM_CONDITIONAL([CONFIG_OS_MACOSX], [test x$host_os = xmacosx])
 AM_CONDITIONAL([CONFIG_OS_MSDOS], [test x$host_os = xmsdos])
