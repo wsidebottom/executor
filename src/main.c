@@ -402,8 +402,6 @@ capable of color.",
 #if defined (SDL)
   { "fullscreen", "try to run in full-screen mode", opt_no_arg, NULL },
   { "hwsurface", "UNSUPPORTED", opt_no_arg, NULL },
-  { "noresizeapp", "resize the Macintosh desktop without automatically "
-    "growing the active document window", opt_no_arg, NULL },
 #if defined (CYGWIN)
   { "sdlaudio", "specify the audio driver to attempt to use first, e.g. "
     "\"executor -sdlaudio waveout\" will tell Executor to use the old "
@@ -1442,7 +1440,6 @@ A2 (PUBLIC, int, main, int, argc, char **, argv)
 
   if (opt_val (common_db, "hwsurface", NULL))
     ROMlib_hwsurface_p = TRUE;
-  ROMlib_resize_app_p = !opt_val (common_db, "noresizeapp", NULL);
 #endif
 
 #if defined(X) || (defined (CYGWIN32) && defined (SDL))

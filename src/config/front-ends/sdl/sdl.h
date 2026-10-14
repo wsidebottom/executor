@@ -15,7 +15,6 @@ extern syn68k_addr_t
 
 extern boolean_t ROMlib_fullscreen_p;
 extern boolean_t ROMlib_hwsurface_p;
-extern boolean_t ROMlib_resize_app_p;
 extern void sdl_apply_pending_resize (void);
 
 #define SDL_MAX_SCREEN_WIDTH 4096

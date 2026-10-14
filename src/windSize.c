@@ -21,71 +21,6 @@ char ROMlib_rcsid_windSize[] =
 #include "rsys/cquick.h"
 #include "rsys/wind.h"
 
-PRIVATE WindowPtr host_resize_window;
-PRIVATE Point host_resize_point;
-PRIVATE int host_resize_width, host_resize_height;
-PRIVATE uint32 host_resize_when;
-PRIVATE boolean_t host_resize_delivered;
-PRIVATE boolean_t host_resize_seen;
-
-void
-ROMlib_request_host_window_resize (int screen_width, int screen_height)
-{
-  WindowPtr window = FrontWindow ();
-  HIDDEN_WindowPtr hit_window;
-  Rect content;
-  Point point;
-  int left, top;
-
-  host_resize_window = NULL;
-  if (!window || WINDOW_KIND (window) != userKind)
-    return;
-  content = HxX (WINDOW_CONT_REGION (window), rgnBBox);
-  left = MAX (4, MIN (CW (content.left), screen_width - 80));
-  top = MAX (CW (MBarHeight) + 20, MIN (CW (content.top), screen_height - 80));
-  if (left != CW (content.left) || top != CW (content.top))
-    {
-      MoveWindow (window, left, top, FALSE);
-      content = HxX (WINDOW_CONT_REGION (window), rgnBBox);
-    }
-  point.h = CW (content.right) - 5;
-  point.v = CW (content.bottom) - 5;
-  if (FindWindow (point, &hit_window) != inGrow || MR (hit_window.p) != window)
-    return;
-  host_resize_width = MAX (64, screen_width - CW (content.left) - 4);
-  host_resize_height = MAX (64, screen_height - CW (content.top) - 4);
-  host_resize_window = window;
-  host_resize_point = point;
-  host_resize_when = TickCount ();
-  host_resize_delivered = FALSE;
-  host_resize_seen = FALSE;
-}
-
-boolean_t
-ROMlib_host_resize_event (INTEGER mask, EventRecord *event, BOOLEAN remove_p)
-{
-  if (!host_resize_window)
-    return FALSE;
-  if (FrontWindow () != host_resize_window
-      || (uint32) TickCount () - host_resize_when > 120)
-    {
-      host_resize_window = NULL;
-      return FALSE;
-    }
-  if (host_resize_delivered || !(mask & mDownMask))
-    return FALSE;
-  event->what = CWC (mouseDown);
-  event->message = CLC (0);
-  event->when = CL (TickCount ());
-  event->where.h = CW (host_resize_point.h);
-  event->where.v = CW (host_resize_point.v);
-  event->modifiers = CWC (0);
-  host_resize_seen = TRUE;
-  if (remove_p)
-    host_resize_delivered = TRUE;
-  return TRUE;
-}
-
 /*
  * Note, the code below probably be rewritten to use XorRgn as much
  *	 as possible and probably have only one CalcVisBehind
@@ -286,18 +221,6 @@ P3(PUBLIC pascal trap, LONGINT, GrowWindow, WindowPtr, w, Point, startp,
     Rect r;
     Rect pinr;
     LONGINT l;
-
-    /* Let the application perform its usual SizeWindow and control layout. */
-    if (host_resize_seen && host_resize_window == w
-	&& startp.h == host_resize_point.h && startp.v == host_resize_point.v)
-      {
-	int width = MAX (CW (rp->left), MIN (host_resize_width, CW (rp->right) - 1));
-	int height = MAX (CW (rp->top), MIN (host_resize_height, CW (rp->bottom) - 1));
-	host_resize_window = NULL;
-	fprintf (stderr, "trace: host grow window=%p size=%dx%d\n",
-		 (void *) w, width, height);
-	return ((uint32) height << 16) | (uint16) width;
-      }
 
     p.h = startp.h;
     p.v = startp.v;

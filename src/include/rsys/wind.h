@@ -10,7 +10,6 @@
  */
 
 #include "WindowMgr.h"
-#include "EventMgr.h"
 #include "MemoryMgr.h"
 #include "ResourceMgr.h"
 #include "OSUtil.h"
@@ -34,10 +33,6 @@ extern LONGINT C_wdef0 (INTEGER, WindowPtr, INTEGER, LONGINT),
 	       C_wdef16(INTEGER, WindowPtr, INTEGER, LONGINT);
 
 extern WindowPeek ROMlib_firstvisible (WindowPtr w);
-extern void ROMlib_request_host_window_resize (int screen_width,
-					     int screen_height);
-extern boolean_t ROMlib_host_resize_event (INTEGER mask, EventRecord *event,
-					  BOOLEAN remove_p);
 
 extern BOOLEAN ROMlib_window_zoomed(WindowPeek wp);
 extern void wind_color_init (void);

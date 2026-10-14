@@ -209,10 +209,6 @@ ROMlib_resize_screen (int width, int height)
   ShowCursor ();
   vdriver_update_screen (0, 0, vdriver_height, vdriver_width, FALSE);
   restore_virtual_ints (int_state);
-#if defined (SDL)
-  if (ROMlib_resize_app_p)
-    ROMlib_request_host_window_resize (vdriver_width, vdriver_height);
-#endif
   fprintf (stderr, "trace: screen resized %dx%d -> %dx%d rowBytes=%d\n",
 	   old_width, old_height, vdriver_width, vdriver_height, vdriver_row_bytes);
   return TRUE;

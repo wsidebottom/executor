@@ -53,7 +53,6 @@ vdriver_opt_register (void)
 
 PUBLIC boolean_t ROMlib_fullscreen_p = FALSE;
 PUBLIC boolean_t ROMlib_hwsurface_p = FALSE;
-PUBLIC boolean_t ROMlib_resize_app_p = TRUE;
 
 boolean_t
 vdriver_init (int _max_width, int _max_height, int _max_bpp,
