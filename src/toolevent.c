@@ -908,6 +908,13 @@ A3(PRIVATE, BOOLEAN, doevent, INTEGER, em, EventRecord *, evt,
     /* We tend to call this routine from various ROMlib modal loops, so this
      * is a good place to check for timer interrupts. */
     check_virtual_interrupt ();
+
+#if defined (SDL)
+    if (remflag)
+      sdl_apply_pending_resize ();
+    if (ROMlib_host_resize_event (em, evt, remflag))
+      return TRUE;
+#endif
     
     hle_reset ();
     

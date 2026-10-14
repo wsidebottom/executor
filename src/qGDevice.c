@@ -24,6 +24,7 @@ char ROMlib_rcsid_gdev[] =
 #include "rsys/autorefresh.h"
 #include "rsys/redrawscreen.h"
 #include "rsys/executor.h"
+#include "rsys/dirtyrect.h"
 
 /*
  * determined experimentally -- this fix is needed for Energy Scheming because
@@ -111,6 +112,111 @@ gd_allocate_main_device (void)
 				       (GD_PMAP (graphics_device))));
      });
 }  
+
+PRIVATE void
+resize_screen_port (GrafPtr port, Ptr old_base)
+{
+  Rect *bounds;
+
+  if (!port || PORT_BASEADDR_X (port) != old_base)
+    return;
+  if (CGrafPort_p (port))
+    PIXMAP_BASEADDR_X (CPORT_PIXMAP (port)) = (Ptr) RM (vdriver_fbuf);
+  else
+    PORT_BITS (port).baseAddr = (Ptr) RM (vdriver_fbuf);
+  bounds = &PORT_BOUNDS (port);
+  bounds->right = CW (CW (bounds->left) + vdriver_width);
+  bounds->bottom = CW (CW (bounds->top) + vdriver_height);
+  if (CGrafPort_p (port))
+    PIXMAP_SET_ROWBYTES_X (CPORT_PIXMAP (port), CW (vdriver_row_bytes));
+  else
+    PORT_BITS (port).rowBytes = screenBitsX.rowBytes;
+}
+
+/* Called at an application event boundary, never from the SDL event filter. */
+boolean_t
+ROMlib_resize_screen (int width, int height)
+{
+  GDHandle device;
+  PixMapHandle pixmap;
+  Ptr old_base;
+  WindowPeek window;
+  RgnHandle screen_region;
+  Rect bounds;
+  int old_width = vdriver_width, old_height = vdriver_height;
+  virtual_int_state_t int_state;
+
+  if (width == old_width && height == old_height)
+    return TRUE;
+  if (!MainDevice || QDExist != EXIST_YES || WWExist != EXIST_YES)
+    return FALSE;
+  int_state = block_virtual_ints ();
+  HideCursor ();
+  dirty_rect_update_screen ();
+  device = MR (MainDevice);
+  pixmap = GD_PMAP (device);
+  old_base = PIXMAP_BASEADDR_X (pixmap);
+  if (!vdriver_set_mode (width, height, vdriver_bpp, vdriver_grayscale_p))
+    {
+      ShowCursor ();
+      restore_virtual_ints (int_state);
+      return FALSE;
+    }
+
+  SetRect (&bounds, 0, 0, vdriver_width, vdriver_height);
+  GD_RECT (device) = PIXMAP_BOUNDS (pixmap) = bounds;
+  PIXMAP_BASEADDR_X (pixmap) = (Ptr) RM (vdriver_fbuf);
+  PIXMAP_SET_ROWBYTES_X (pixmap, CW (vdriver_row_bytes));
+  screenBitsX.baseAddr = PIXMAP_BASEADDR_X (pixmap);
+  screenBitsX.bounds = bounds;
+  screenBitsX.rowBytes = CW (vdriver_row_bytes / vdriver_bpp);
+  ScrnBase = screenBitsX.baseAddr;
+  ScreenRow = screenBitsX.rowBytes;
+  CrsrPin = bounds;
+  MouseLocation.h = CW (MAX (0, MIN (CW (MouseLocation.h), vdriver_width - 1)));
+  MouseLocation.v = CW (MAX (0, MIN (CW (MouseLocation.v), vdriver_height - 1)));
+  MouseLocation2 = MTemp = MouseLocation;
+
+  resize_screen_port (thePort, old_base);
+  resize_screen_port (MR (WMgrPort), old_base);
+  resize_screen_port (MR (wmgr_port), old_base);
+  PORT_RECT (MR (WMgrPort)) = PORT_RECT (MR (wmgr_port)) = bounds;
+  for (window = MR (WindowList); window; window = WINDOW_NEXT_WINDOW (window))
+    resize_screen_port (WINDOW_PORT (window), old_base);
+
+  SetRectRgn (MR (GrayRgn), 0, CW (MBarHeight),
+	      vdriver_width, vdriver_height);
+  RectRgn (PORT_VIS_REGION (MR (WMgrPort)), &bounds);
+  RectRgn (PORT_VIS_REGION (MR (wmgr_port)), &bounds);
+  CopyRgn (MR (GrayRgn), PORT_CLIP_REGION (MR (WMgrPort)));
+  CopyRgn (MR (GrayRgn), PORT_CLIP_REGION (MR (wmgr_port)));
+  for (window = MR (WindowList); window; window = WINDOW_NEXT_WINDOW (window))
+    CalcVis (window);
+
+  screen_region = NewRgn ();
+  RectRgn (screen_region, &bounds);
+  THEGDEVICE_SAVE_EXCURSION
+    (device,
+     {
+       vdriver_set_colors (0, 1 << vdriver_bpp,
+			   CTAB_TABLE (PIXMAP_TABLE (pixmap)));
+       PaintBehind (MR (WindowList), screen_region);
+       DrawMenuBar ();
+     });
+  DisposeRgn (screen_region);
+  note_executor_changed_screen (0, vdriver_height);
+  cursor_reset_current_cursor ();
+  ShowCursor ();
+  vdriver_update_screen (0, 0, vdriver_height, vdriver_width, FALSE);
+  restore_virtual_ints (int_state);
+#if defined (SDL)
+  if (ROMlib_resize_app_p)
+    ROMlib_request_host_window_resize (vdriver_width, vdriver_height);
+#endif
+  fprintf (stderr, "trace: screen resized %dx%d -> %dx%d rowBytes=%d\n",
+	   old_width, old_height, vdriver_width, vdriver_height, vdriver_row_bytes);
+  return TRUE;
+}
 
 P2 (PUBLIC pascal trap, GDHandle, NewGDevice,
     INTEGER, ref_num,

@@ -71,7 +71,7 @@ ROMlib_recenter_window (void)
 
 	  caption_height = GetSystemMetrics (SM_CYCAPTION);
 	  width = bounds.right-bounds.left;
-	  height = bounds.bottom-bounds.top + caption_height;
+      height = bounds.bottom-bounds.top;
 	  x = (GetSystemMetrics(SM_CXFULLSCREEN)-width)/2;
 	  y = (GetSystemMetrics(SM_CYFULLSCREEN)-height)/2;
 #if 0

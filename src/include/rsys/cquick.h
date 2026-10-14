@@ -698,6 +698,7 @@ extern void ROMlib_fill_pixpat (PixPatHandle);
 extern RGBColor *ROMlib_qd_color_to_rgb (LONGINT);
 
 extern void gd_allocate_main_device (void);
+extern boolean_t ROMlib_resize_screen (int width, int height);
 extern void gd_set_main_device_bpp (void);
 extern void gd_set_bpp (GDHandle gd, boolean_t color_p, boolean_t fixed_p,
 			int bpp);

@@ -20,12 +20,28 @@ char ROMlib_rcsid_sdlevents[] = "$Id: sdlevents.c 88 2005-05-25 03:59:37Z ctm $"
 #include "rsys/keyboard.h"
 #include "rsys/adb.h"
 #include "rsys/scrap.h"
+#include "rsys/cquick.h"
+#include "rsys/vdriver.h"
 #include "rsys/toolevent.h"
 #include "rsys/keyboard.h"
 
 #include "SDL/SDL.h"
 
 PRIVATE boolean_t use_scan_codes = FALSE;
+PRIVATE int pending_width, pending_height;
+
+void
+sdl_apply_pending_resize (void)
+{
+  int width, height;
+
+  if (!pending_width || !pending_height)
+    return;
+  width = pending_width;
+  height = pending_height;
+  pending_width = pending_height = 0;
+  ROMlib_resize_screen (width, height);
+}
 
 PUBLIC void
 ROMlib_set_use_scancodes (boolean_t val)
@@ -253,6 +269,20 @@ handle_sdl_events(syn68k_addr_t interrupt_addr, void *unused)
     {
       switch (event.type)
 	{
+	case SDL_VIDEORESIZE:
+	  if (!ROMlib_fullscreen_p)
+	    {
+	      pending_width = MAX (VDRIVER_MIN_SCREEN_WIDTH,
+				   MIN (event.resize.w, SDL_MAX_SCREEN_WIDTH));
+	      pending_height = MAX (VDRIVER_MIN_SCREEN_HEIGHT,
+				    MIN (event.resize.h, SDL_MAX_SCREEN_HEIGHT));
+	    }
+	  break;
+
+	case SDL_VIDEOEXPOSE:
+	  vdriver_update_screen (0, 0, vdriver_height, vdriver_width, FALSE);
+	  break;
+
 	case SDL_ACTIVEEVENT:
           {
             if ( event.active.state & SDL_APPINPUTFOCUS )

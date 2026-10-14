@@ -130,12 +130,22 @@ sdl_syswm_event(const SDL_Event *event)
   retval = 0;
   switch (event->syswm.msg->msg)
     {
-    case WM_SYSCOMMAND:
-      if (event->syswm.msg->wParam == SC_MAXIMIZE)
-	{
-	  ROMlib_recenter_window ();
-	  retval = 1;
-	}
+    case WM_GETMINMAXINFO:
+      {
+	MINMAXINFO *limits = (MINMAXINFO *) event->syswm.msg->lParam;
+	RECT outer, client;
+	HWND window = event->syswm.msg->hwnd;
+	int border_width, border_height;
+
+	GetWindowRect (window, &outer);
+	GetClientRect (window, &client);
+	border_width = outer.right - outer.left - client.right;
+	border_height = outer.bottom - outer.top - client.bottom;
+	limits->ptMinTrackSize.x = 512 + border_width;
+	limits->ptMinTrackSize.y = 342 + border_height;
+	limits->ptMaxTrackSize.x = SDL_MAX_SCREEN_WIDTH + border_width;
+	limits->ptMaxTrackSize.y = SDL_MAX_SCREEN_HEIGHT + border_height;
+      }
       break;
     case WM_RENDERFORMAT:
       if (event->syswm.msg->wParam == CF_DIB)

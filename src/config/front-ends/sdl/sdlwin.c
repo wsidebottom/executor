@@ -37,7 +37,8 @@ int vdriver_max_bpp, vdriver_log2_max_bpp;
 vdriver_modes_t *vdriver_mode_list;
 
 /* Currently a private colormap is the default */
-static int video_flags = (SDL_SWSURFACE|SDL_HWPALETTE);
+static int video_flags = (SDL_SWSURFACE|SDL_HWPALETTE|SDL_RESIZABLE);
+extern unsigned char *vdriver_shadow_fbuf;
 
 /* The modes structure is just checked for error messages, fake it here */
 static vdriver_modes_t sdl_impotent_modes = { 0, 0 };
@@ -52,6 +53,7 @@ vdriver_opt_register (void)
 
 PUBLIC boolean_t ROMlib_fullscreen_p = FALSE;
 PUBLIC boolean_t ROMlib_hwsurface_p = FALSE;
+PUBLIC boolean_t ROMlib_resize_app_p = TRUE;
 
 boolean_t
 vdriver_init (int _max_width, int _max_height, int _max_bpp,
@@ -85,7 +87,10 @@ vdriver_init (int _max_width, int _max_height, int _max_bpp,
 
   /* Try for fullscreen on platforms that support it */
   if ( getenv("SDL_FULLSCREEN") != NULL || ROMlib_fullscreen_p )
-    video_flags |= SDL_FULLSCREEN;
+    {
+      ROMlib_fullscreen_p = TRUE;
+      video_flags = (video_flags | SDL_FULLSCREEN) & ~SDL_RESIZABLE;
+    }
 
   /* Allow unsafe fullscreen video memory access */
   if ( getenv("SDL_HWSURFACE") != NULL || ROMlib_hwsurface_p )
@@ -111,7 +116,10 @@ vdriver_acceptable_mode_p (int width, int height, int bpp,
   if (!bpp)
     bpp = vdriver_bpp;
 
-  if ( ! SDL_VideoModeOK(width, height, bpp, video_flags) )
+  if (width < VDRIVER_MIN_SCREEN_WIDTH || height < VDRIVER_MIN_SCREEN_HEIGHT
+      || width > SDL_MAX_SCREEN_WIDTH || height > SDL_MAX_SCREEN_HEIGHT)
+    retval = FALSE;
+  else if ( ! SDL_VideoModeOK(width, height, bpp, video_flags) )
     retval = FALSE;
   else if ( grayscale_p != vdriver_grayscale_p )
     retval = FALSE;
@@ -124,6 +132,8 @@ vdriver_acceptable_mode_p (int width, int height, int bpp,
 boolean_t
 vdriver_set_mode (int width, int height, int bpp, boolean_t grayscale_p)
 {
+  SDL_Surface *new_screen;
+  boolean_t initial_mode_p = screen == NULL;
   /* Massage the width and height parameters */
   if ( width == 0 )
     {
@@ -162,32 +172,35 @@ vdriver_set_mode (int width, int height, int bpp, boolean_t grayscale_p)
     return(FALSE);
 
   /* Set the video mode */
-  screen = SDL_SetVideoMode(width, height, bpp, video_flags);
-  if ( screen == NULL )
+  /* Keep Macintosh base addresses and row strides valid during host resizes.
+   * SDL owns a separate presentation surface, uploaded by the update routines.
+   */
+  if (vdriver_fbuf == NULL)
+    {
+      vdriver_fbuf = calloc (SDL_MAX_SCREEN_WIDTH * SDL_MAX_SCREEN_HEIGHT + 64,
+			     1);
+      if (vdriver_fbuf == NULL)
+	return FALSE;
+    }
+  new_screen = SDL_SetVideoMode(width, height, bpp, video_flags);
+  if (new_screen == NULL)
     return(FALSE);
+  screen = new_screen;
 
   /* Fill the vdriver globals */
   vdriver_width = screen->w;
   vdriver_height = screen->h;
   vdriver_bpp = screen->format->BitsPerPixel;
   vdriver_log2_bpp = ROMlib_log2[vdriver_bpp];
-  vdriver_row_bytes = screen->pitch;
-  if ( SDL_MUSTLOCK(screen) )
-    {
-      /* WARNING!  This results in surface memory that is unsafe to access! */
-      if ( SDL_LockSurface(screen) < 0 )
-        return(FALSE);
-      vdriver_fbuf = (uint8 *)screen->pixels;
-      SDL_UnlockSurface(screen);
-      fprintf(stderr, "Warning: Executor performing unsafe video access\n");
-    }
-  else
-      vdriver_fbuf = (uint8 *)screen->pixels;
+  vdriver_row_bytes = SDL_MAX_SCREEN_WIDTH;
+  free (vdriver_shadow_fbuf);
+  vdriver_shadow_fbuf = NULL;
 
   sdl_syswm_init();
 
 #if defined(CYGWIN32)
-  ROMlib_recenter_window ();
+  if (initial_mode_p)
+    ROMlib_recenter_window ();
 #endif
 
   return(TRUE);
@@ -220,17 +233,31 @@ vdriver_update_screen_rects (int num_rects, const vdriver_rect_t *r,
                                                       boolean_t cursor_p)
 {
   SDL_Rect *rects;
-  int       i;
+  int i, count;
 
   rects = (SDL_Rect *)alloca(num_rects*sizeof(SDL_Rect));
-  for ( i = 0; i < num_rects; ++i )
+  if (SDL_MUSTLOCK (screen) && SDL_LockSurface (screen) < 0)
+    return -1;
+  for (i = count = 0; i < num_rects; ++i)
     {
-      rects[i].x = r[i].left;
-      rects[i].w = r[i].right-r[i].left;
-      rects[i].y = r[i].top;
-      rects[i].h = r[i].bottom-r[i].top;
+      int top = MAX (0, r[i].top), left = MAX (0, r[i].left);
+      int bottom = MIN (vdriver_height, r[i].bottom);
+      int right = MIN (vdriver_width, r[i].right);
+      int y;
+
+      if (right <= left || bottom <= top)
+	continue;
+      for (y = top; y < bottom; ++y)
+	memcpy ((uint8 *) screen->pixels + y * screen->pitch + left,
+		vdriver_fbuf + y * vdriver_row_bytes + left, right - left);
+      rects[count].x = left;
+      rects[count].w = right - left;
+      rects[count].y = top;
+      rects[count++].h = bottom - top;
     }
-  SDL_UpdateRects(screen, num_rects, rects);
+  if (SDL_MUSTLOCK (screen))
+    SDL_UnlockSurface (screen);
+  SDL_UpdateRects(screen, count, rects);
   return(0);
 }
 
@@ -238,7 +265,7 @@ int
 vdriver_update_screen (int top, int left, int bottom, int right,
 		       boolean_t cursor_p)
 {
-  SDL_Rect rect;
+  vdriver_rect_t rect;
   
   if (top < 0)
     top = 0;
@@ -250,13 +277,11 @@ vdriver_update_screen (int top, int left, int bottom, int right,
   if (right > vdriver_width)
     right = vdriver_width;
   
-  rect.x = left;
-  rect.w = right-left;
-  rect.y = top;
-  rect.h = bottom-top;
-  SDL_UpdateRects(screen, 1, &rect);
-
-  return(0);
+  rect.left = left;
+  rect.right = right;
+  rect.top = top;
+  rect.bottom = bottom;
+  return vdriver_update_screen_rects (1, &rect, cursor_p);
 }
 
 void
@@ -268,6 +293,8 @@ void
 vdriver_shutdown (void)
 {
   SDL_Quit();
+  free (vdriver_fbuf);
+  vdriver_fbuf = NULL;
 }
 
 /* host functions that should go away */
