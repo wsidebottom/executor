@@ -563,6 +563,7 @@ PRIVATE void launchchain(StringPtr fName, INTEGER vRefNum, BOOLEAN resetmemory,
 	     fName[0], fName + 1, CW (vRefNum), resetmemory);
     fflush (stderr);
 
+    ROMlib_set_mmu_mode (TRUE);
     for (p = fName + fName[0] + 1; p > fName && *--p != ':';)
 	;
     toskip = p - fName;
@@ -778,6 +779,21 @@ PRIVATE void launchchain(StringPtr fName, INTEGER vRefNum, BOOLEAN resetmemory,
       size_info.application_p = TRUE;
       
       size_flags = size_info.size_flags;
+
+      {
+        Byte mode32 = ROMlib_addressing_mode >= 0 ? ROMlib_addressing_mode
+          : (size_info.size_resource_present_p
+             && (size_flags & SZis32BitCompatible)) != 0;
+        /* Other front ends do not yet reserve a 24-bit display buffer. */
+        if (ROMlib_addressing_mode < 0 && !ROMlib_guest_framebuffer)
+          mode32 = TRUE;
+        if (!ROMlib_set_mmu_mode (mode32))
+          {
+            fprintf (stderr, "Unable to launch in 24-bit mode; reduce memory/display size or use -32bit\n");
+            exit (1);
+          }
+        fprintf (stderr, "trace: Macintosh addressing mode=%d-bit\n", mode32 ? 32 : 24);
+      }
       
       /* we don't accept open app events until a handler is installed */
       application_accepts_open_app_aevt_p = FALSE;

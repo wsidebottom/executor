@@ -34,9 +34,9 @@ typedef struct
 #define UNKNOWN	0xFFFF
 
 PRIVATE gestaltentry_t gtable[] = {
-  { gestaltAddressingModeAttr,	gestalt32BitAddressing |
-				gestalt32BitSysZone    |
-				gestalt32BitCapable, },
+  { gestaltAddressingModeAttr, (1 << gestalt32BitAddressing) |
+                              (1 << gestalt32BitSysZone) |
+                              (1 << gestalt32BitCapable), },
 
 /*
  * note: PageMaker 4.2 does a Gestalt call for the AliasMgr and then
@@ -475,6 +475,13 @@ ROMlib_add_to_gestalt_list (OSType selector, OSErr retval, uint32 new_value)
 A2(PUBLIC trap, OSErrRET, Gestalt, OSType, selector, LONGINT *, responsep)
 {
   static boolean_t been_here = FALSE;
+
+  if (selector == gestaltAddressingModeAttr)
+    {
+      *responsep = CL ((1 << gestalt32BitSysZone) | (1 << gestalt32BitCapable)
+                       | (MMU32Bit ? 1 << gestalt32BitAddressing : 0));
+      return noErr;
+    }
 
   warning_trace_info ("IN: sel `%c%c%c%c'",
 		      (selector >> 24) & 0xFF,

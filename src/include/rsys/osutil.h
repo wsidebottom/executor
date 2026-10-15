@@ -30,5 +30,7 @@ extern LONGINT ROMlib_GMTcorrect;	/* Correction for GMT to localtime */
 #define MACTIMETOGUNIXTIME(x) ((x) + ROMlib_GMTcorrect - U70MINUSM04)
 
 extern char ROMlib_phoneyrom[];
+extern int ROMlib_addressing_mode;
+extern boolean_t ROMlib_set_mmu_mode (Byte mode32);
 
 #endif /* ! efined(__RSYS_OSUTIL__) */

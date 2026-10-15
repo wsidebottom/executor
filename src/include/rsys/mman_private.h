@@ -99,8 +99,10 @@ extern unsigned long ROMlib_memtop;
   ((block_header_t *) ((char *) (pointer) - HDRSIZE))
 
 /* extract the handle state bits */
-#define HANDLE_STATE(handle, block)			\
-  ((block)->master_ptr_flags)
+#define HANDLE_STATE(handle, block) \
+  (syn68k_address_mask == 0x00FFFFFFUL \
+   ? ((block)->master_ptr_flags = CL ((uint32) (handle)->p) >> 24) \
+   : (block)->master_ptr_flags)
 
 #define FREE_BLOCK_STATE	(0x1A)
 #define STATE_BITS		(LOCKBIT | PURGEBIT | RSRCBIT)
@@ -110,14 +112,23 @@ extern unsigned long ROMlib_memtop;
 #define BLOCK_STATE(block)				\
   ((block)->master_ptr_flags)
 
-#define SET_HANDLE_STATE(handle, block, state)		\
-  ((block)->master_ptr_flags = (state))
+#define SET_HANDLE_STATE(handle, block, state) do { \
+  (block)->master_ptr_flags = (state); \
+  if (syn68k_address_mask == 0x00FFFFFFUL) \
+    (handle)->p = (Ptr) CL ((CL ((uint32) (handle)->p) & 0x00FFFFFF) \
+                           | ((uint32) (block)->master_ptr_flags << 24)); \
+} while (0)
 
 #define SET_BLOCK_STATE(block, state)			\
   ((block)->master_ptr_flags = (state))
 
 /* set the master pointer of a handle to a given value */
-#define SETMASTER(handle, ptr)	((handle)->p = RM (ptr))
+#define SETMASTER(handle, ptr) do { \
+  const void *_new_master = (const void *) (ptr); \
+  uint32 _state = _new_master && syn68k_address_mask == 0x00FFFFFFUL \
+    ? CL ((uint32) (handle)->p) & 0xFF000000 : 0; \
+  (handle)->p = (Ptr) CL (US_TO_SYN68K_CHECK0 (_new_master) | _state); \
+} while (0)
 
 #define BLOCK_NEXT(block)			\
   ((block_header_t *) ((char *) (block) + PSIZE (block)))

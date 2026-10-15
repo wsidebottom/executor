@@ -8,6 +8,7 @@ char ROMlib_rcsid_emustubs[] =
 #endif
 
 #include "rsys/common.h"
+#include "rsys/osutil.h"
 
 #include <stdarg.h>
 
@@ -24,6 +25,7 @@ char ROMlib_rcsid_emustubs[] =
 #include "PrintMgr.h"
 #include "IntlUtil.h"
 #include "MemoryMgr.h"
+#include "SysErr.h"
 #include "CQuickDraw.h"
 #include "SoundMgr.h"
 #include "HelpMgr.h"
@@ -90,6 +92,20 @@ char ROMlib_rcsid_emustubs[] =
 
 #define STUB_RTS(x) STUB(x) { RTS(); }
 
+STUB (SysError)
+{
+  syn68k_addr_t retaddr = POPADDR ();
+  M68kReg saved_regs[16];
+  int16 errorcode = EM_D0;
+  memcpy (saved_regs, cpu_state.regs, sizeof saved_regs);
+  C_SysError (errorcode);
+  memcpy (cpu_state.regs, saved_regs, sizeof saved_regs);
+  /* A failed segment load cannot resume at the missing code. */
+  if (errorcode == 15 && !ResumeProc)
+    C_ExitToShell ();
+  return retaddr;
+}
+
 STUB(GetDefaultStartup)
 {
     (SYN68K_TO_US((signed char *)EM_A0))[0] = -1;
@@ -130,9 +146,9 @@ STUB(SetOSDefault)
 
 STUB(SwapMMUMode)
 {
-    EM_D0 &= 0xFFFFFF00;
-    EM_D0 |= 0x00000001;
-    MMU32Bit = 0x01;	/* TRUE32b */
+    Byte mode = EM_D0;
+    SwapMMUMode (&mode);
+    EM_D0 = (EM_D0 & 0xFFFFFF00) | mode;
     RTS();
 }
 
@@ -1963,6 +1979,7 @@ STUB(UprString)
 
 STUB(StripAddress)
 {
+   EM_D0 = StripAddress (EM_D0);
    RTS();
 }
 

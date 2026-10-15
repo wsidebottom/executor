@@ -327,7 +327,7 @@ Executor may die without warning because of this mismatch", 0,
 
   if ((! size_info.size_resource_present_p
        || (size_info.size_flags & SZis32BitCompatible) != SZis32BitCompatible)
-      && !ROMlib_nowarn32)
+      && !ROMlib_nowarn32 && MMU32Bit)
     {
       system_error ("This application doesn't claim to be \"32 bit clean\".  "
 		    "It is quite possible that this program will not work "

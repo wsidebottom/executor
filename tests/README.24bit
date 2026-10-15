@@ -1,0 +1,42 @@
+Windows SDL 24-bit Macintosh addressing
+======================================
+
+Executor selects 24-bit addressing for applications without the
+32-bit-compatible SIZE flag. Use -24bit or -32bit to override that choice.
+GetMMUMode, SwapMMUMode, StripAddress and Gestalt addressing attributes follow
+the active mode. Handles carry their state bits in the master pointer's high
+byte in 24-bit mode.
+
+The Windows SDL frontend reserves low guest addresses for callbacks and host
+pointer mappings. Host pointers published during startup retain the same guest
+address across mode changes. This frontend currently uses the interpreter;
+the native translator does not implement these host pointer mappings.
+
+Automatic and forced 24-bit startup default to a 6 MB application heap and a
+2 MB system heap. Explicit -memory, -applzone and -syszone options take
+precedence. The heap, stack and visible framebuffer must fit below 16 MB.
+Larger display modes are rejected if their framebuffer would cross that limit.
+Other frontends retain automatic 32-bit startup until they reserve a suitable
+framebuffer. Explicit 24-bit startup on them reports the unsupported layout.
+
+CPU regression test (from the workspace root, in WSL):
+
+  cd syn68k
+  i686-w64-mingw32-gcc -g -O0 -DHAVE_CONFIG_H -Iinclude \
+    test/address24.c runtime/libsyn68k.a -o ../build/address24-test.exe
+  ../build/address24-test.exe
+
+The Windows test executes real 68K instructions for tagged byte/word/long
+accesses, indexed and absolute addressing, LEA, low-memory reads, PEA and RTE.
+It also checks host pointer mappings created before switching to 24-bit mode
+and retained after switching back to 32-bit mode. Run the full syn68k CRC
+suite as well; make check only builds the Windows harness in this cross-build.
+
+Memory manager regression test (from the workspace root, in WSL):
+
+  bash executor/tests/run-24bit-memory-tests.sh
+
+This links the production memory manager and syn68k library. It checks tagged
+handle locking, relocation with retained data and state, 24/32-bit state
+conversion, purging, empty master pointers and reallocating empty handles.
+Only UI, resource diagnostics and patched-trap callbacks are stubbed.

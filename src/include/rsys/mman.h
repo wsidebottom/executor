@@ -30,6 +30,8 @@ extern void print_mem_full_message (void);
 #define MALLOC_MAC_MEMORY
 
 extern int ROMlib_applzone_size, ROMlib_syszone_size, ROMlib_stack_size;
+extern unsigned char *ROMlib_guest_framebuffer;
+extern void ROMlib_sync_handle_flags (boolean_t mode32);
 
 #if !defined (NDEBUG) && defined (HAVE_MMAP)
 #define MM_MANY_APPLZONES

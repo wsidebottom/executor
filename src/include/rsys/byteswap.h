@@ -24,8 +24,8 @@
  * #define RM(rhs)		(rhs) / * ROMlib to Mac * /
  */
 
-#define MR(n)  ((typeof (n))({ typeof (n) _t = n; _t ? ((((unsigned long) (_t))) + ROMlib_offset) : 0;}))
-#define RM(n)  ((typeof (n))({ typeof (n) _t = n; _t ? ((((unsigned long) (_t)- ROMlib_offset)) ) : 0;}))
+#define MR(n)  ((typeof (n))({ typeof (n) _t = n; _t ? (SYN68K_TO_US_CHECK0 ((unsigned long) _t)) : 0;}))
+#define RM(n)  ((typeof (n))({ typeof (n) _t = n; _t ? (US_TO_SYN68K ((unsigned long) _t)) : 0;}))
 
 #define CLC_NULL NULL
 
@@ -41,18 +41,18 @@
 
 #if (SIZEOF_CHAR_P == 4) && !FORCE_EXPERIMENTAL_PACKED_MACROS
 
-#  define MR(n)  ((typeof (n))({ typeof (n) _t = n; _t ? ((swap32 ((unsigned long) (_t))) + ROMlib_offset) : 0;}))
+#  define MR(n)  ((typeof (n))({ typeof (n) _t = n; _t ? (SYN68K_TO_US_CHECK0 (swap32 ((unsigned long) _t))) : 0;}))
 
 #else
 
 /* YY needs a better name, right now it's just a helper for MR */
-#  define YY(n) (swap32((uint32)(n)) + ROMlib_offset)
+#  define YY(n) SYN68K_TO_US_CHECK0 (swap32 ((uint32)(n)))
 
 #  define MR(n)  ((typeof (n))({ typeof (n) _t = n; _t ? (YY(_t)) : 0;}))
 #endif
 
 
-#define RM(n)  ((typeof (n))({ typeof (n) _t = n; _t ? ((swap32 ((unsigned long) (_t)- ROMlib_offset)) ) : 0;}))
+#define RM(n)  ((typeof (n))({ typeof (n) _t = n; _t ? (swap32 (US_TO_SYN68K ((unsigned long) _t))) : 0;}))
 
 /* Packed Pointer to ROMlib  */
 #if (SIZEOF_CHAR_P == 4) && !FORCE_EXPERIMENTAL_PACKED_MACROS

@@ -9,6 +9,7 @@ char ROMlib_rcsid_sdlwin[] = "$Id: sdlwin.c 63 2004-12-24 18:19:43Z ctm $";
 #include "rsys/common.h"
 #include "rsys/srcblt.h"
 #include "rsys/refresh.h"
+#include "rsys/mman.h"
 
 #if defined (CYGWIN32)
 #include "win_screen.h"
@@ -118,6 +119,13 @@ vdriver_acceptable_mode_p (int width, int height, int bpp,
   if (width < VDRIVER_MIN_SCREEN_WIDTH || height < VDRIVER_MIN_SCREEN_HEIGHT
       || width > SDL_MAX_SCREEN_WIDTH || height > SDL_MAX_SCREEN_HEIGHT)
     retval = FALSE;
+#if defined (SYN68K)
+  else if (syn68k_address_mask == 0x00FFFFFFUL
+           && vdriver_fbuf
+           && (uint64) US_TO_SYN68K_RAW (vdriver_fbuf)
+              + (uint64) SDL_MAX_SCREEN_WIDTH * (height - 1) + width > 0x1000000)
+    retval = FALSE;
+#endif
   else if ( ! SDL_VideoModeOK(width, height, bpp, video_flags) )
     retval = FALSE;
   else if ( grayscale_p != vdriver_grayscale_p )
@@ -176,8 +184,9 @@ vdriver_set_mode (int width, int height, int bpp, boolean_t grayscale_p)
    */
   if (vdriver_fbuf == NULL)
     {
-      vdriver_fbuf = calloc (SDL_MAX_SCREEN_WIDTH * SDL_MAX_SCREEN_HEIGHT + 64,
-			     1);
+      vdriver_fbuf = ROMlib_guest_framebuffer;
+      if (!vdriver_fbuf)
+        vdriver_fbuf = calloc (SDL_MAX_SCREEN_WIDTH * SDL_MAX_SCREEN_HEIGHT + 64, 1);
       if (vdriver_fbuf == NULL)
 	return FALSE;
     }
@@ -292,7 +301,8 @@ void
 vdriver_shutdown (void)
 {
   SDL_Quit();
-  free (vdriver_fbuf);
+  if (vdriver_fbuf != ROMlib_guest_framebuffer)
+    free (vdriver_fbuf);
   vdriver_fbuf = NULL;
 }
 

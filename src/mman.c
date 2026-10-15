@@ -49,6 +49,7 @@ char ROMlib_rcsid_mman[] =
 int ROMlib_applzone_size = DEFAULT_APPLZONE_SIZE;
 int ROMlib_syszone_size  = DEFAULT_SYSZONE_SIZE;
 int ROMlib_stack_size    = DEFAULT_STACK_SIZE;
+unsigned char *ROMlib_guest_framebuffer;
 
 /* these two variables define, in ROMlib space, the beginning of mac-memory
    and the end of mac memory.  They're purpose is to try to prevent routines
@@ -60,6 +61,34 @@ int ROMlib_stack_size    = DEFAULT_STACK_SIZE;
 
 PUBLIC unsigned long ROMlib_syszone;
 PUBLIC unsigned long ROMlib_memtop;
+
+void
+ROMlib_sync_handle_flags (boolean_t mode32)
+{
+  THz zones[2] = { MR (SysZone), MR (ApplZone) };
+  int i;
+  for (i = 0; i < 2; ++i)
+    if (zones[i])
+      {
+        block_header_t *block, *end = ZONE_BK_LIM (zones[i]);
+        for (block = ZONE_HEAP_DATA (zones[i]); block < end;
+             block = BLOCK_NEXT (block))
+          {
+            if (PSIZE (block) < MIN_BLOCK_SIZE
+                || PSIZE (block) > (char *) end - (char *) block)
+              break;
+            if (USE (block) == REL)
+              {
+                Handle h = BLOCK_TO_HANDLE (zones[i], block);
+                uint32 pointer = CL ((uint32) h->p);
+                if (syn68k_address_mask == 0x00FFFFFFUL)
+                  block->master_ptr_flags = pointer >> 24;
+                h->p = (Ptr) CL ((pointer & 0x00FFFFFFUL)
+                       | (mode32 ? 0 : (uint32) block->master_ptr_flags << 24));
+              }
+          }
+      }
+}
 
 #if defined (MM_MANY_APPLZONES)
 /* for debugging, we can have multiple applzones which are used
@@ -400,6 +429,8 @@ ROMlib_InitZones (offset_enum which)
       char *memory;
       unsigned long total_allocated_memory, total_mac_visible_memory;
       Ptr mem_top;
+      char *allocation_base;
+      unsigned long guest_prefix = 0, extra_memory = 0;
       
       canonicalize_memory_sizes ();
       
@@ -423,9 +454,20 @@ ROMlib_InitZones (offset_enum which)
 				+ applzone_memory_segment_size
 				+ STACK_SIZE);
       total_allocated_memory = (total_allocated_memory + 8191) & ~8191;
+
+#if defined (SDL) && defined (CYGWIN32) && defined (SYN68K)
+      /* Keep the framebuffer and callback targets reachable in 24-bit mode.
+       * The reserved hole holds aliases for native Toolbox callback arguments.
+       */
+      if (which == offset_big)
+        {
+          guest_prefix = 0x410000;
+          extra_memory = guest_prefix + 4096UL * 4096 + 64;
+        }
+#endif
       
       /* Note the memory in gestalt, rounded down the next 8K page multiple. */
-      gestalt_set_memory_size (total_mac_visible_memory);
+      gestalt_set_memory_size (total_mac_visible_memory + guest_prefix);
       
       /* Allocate memory for SysZone, ApplZone, and stack, contiguously. */
       memory = NULL;
@@ -449,7 +491,7 @@ ROMlib_InitZones (offset_enum which)
 
       /* Allocate with malloc if we don't have it yet. */
       if (memory == NULL)
-	memory = malloc (total_allocated_memory);
+	memory = calloc (1, total_allocated_memory + extra_memory);
 
       if (memory == NULL)
 	{
@@ -459,7 +501,18 @@ ROMlib_InitZones (offset_enum which)
 
       /* can't assign to low-memory globals yet */
 
-      mem_top = (Ptr) RM (memory + total_allocated_memory);
+      allocation_base = memory;
+#if defined (SDL) && defined (CYGWIN32) && defined (SYN68K)
+      if (guest_prefix)
+        {
+          syn68k_callback_address_space = (uint16 *) (memory + 0x3000);
+          ROMlib_guest_framebuffer = (unsigned char *) memory
+            + guest_prefix + total_allocated_memory;
+          syn68k_set_memory_window (total_allocated_memory + extra_memory,
+                                    0x10000, 0x400000);
+          memory += guest_prefix;
+        }
+#endif
       
       stack_begin = ((Ptr) memory
 		     + INIT_SYSZONE_SIZE
@@ -477,15 +530,18 @@ ROMlib_InitZones (offset_enum which)
 	  ROMlib_offset = 8192;
 	  break;
 	case offset_big:
-	  ROMlib_offset = (uint32) memory;
+	  ROMlib_offset = (uint32) allocation_base;
 	  {
 	    int low_global_room = (char *) &lastlowglobal -
 	                          (char *) &nilhandle_H;
 #if defined (MSDOS)
 	    dpmi_lock_memory (&nilhandle_H, low_global_room);
 #endif
-	    memory += low_global_room;
-	    init_syszone_size -= low_global_room;
+	    if (!guest_prefix)
+	      {
+	        memory += low_global_room;
+	        init_syszone_size -= low_global_room;
+	      }
 	  }
 	  break;
 	default:
@@ -493,6 +549,7 @@ ROMlib_InitZones (offset_enum which)
 	  break;
 	}
 
+      mem_top = (Ptr) RM (allocation_base + guest_prefix + total_allocated_memory);
       MemTop = mem_top;
 
       SysZone = (void *) RM (memory);
@@ -1440,6 +1497,7 @@ _FreeMem_flags (boolean_t sys_p)
     freespace = ZONE_ZCB_FREE (MR (SysZone));
   else
     freespace = ZONE_ZCB_FREE (MR (TheZone));
+
   
   SET_MEM_ERR (noErr);
   return freespace;

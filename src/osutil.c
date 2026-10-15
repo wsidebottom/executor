@@ -28,6 +28,7 @@ char ROMlib_rcsid_osutil[] =
 #include "rsys/trapglue.h"
 #include "rsys/pstuff.h"
 #include "rsys/osutil.h"
+#include "rsys/vdriver.h"
 #include "rsys/host.h"
 #include "rsys/time.h"
 #include "rsys/toolevent.h"
@@ -1023,17 +1024,50 @@ A0(PUBLIC, void, RestoreA5)
 
 #define TRUE32b	1
 
+int ROMlib_addressing_mode = -1;
+
+boolean_t
+ROMlib_set_mmu_mode (Byte mode32)
+{
+#if defined (SYN68K)
+  if (!mode32)
+    {
+      if (!ROMlib_guest_framebuffer
+          || (uint64) US_TO_SYN68K_RAW (MR (ApplLimit)) > 0x1000000
+          || (uint64) US_TO_SYN68K_RAW (ROMlib_guest_framebuffer)
+             + (uint64) vdriver_row_bytes * vdriver_height > 0x1000000)
+        {
+          fprintf (stderr, "24-bit mode requires the heap and display below 16 MB (heap=%08lx screen=%08lx bytes=%lu backing=%p)\n",
+                   (unsigned long) US_TO_SYN68K_RAW (MR (ApplLimit)),
+                   (unsigned long) US_TO_SYN68K_RAW (ROMlib_guest_framebuffer),
+                   (unsigned long) vdriver_row_bytes * vdriver_height,
+                   ROMlib_guest_framebuffer);
+          return FALSE;
+        }
+    }
+  if ((mode32 != 0) != (syn68k_address_mask == 0xFFFFFFFFUL))
+    ROMlib_sync_handle_flags (mode32 != 0);
+  syn68k_set_addressing_mode (mode32 != 0);
+  MMU32Bit = mode32 ? TRUE32b : FALSE;
+  return TRUE;
+#else
+  return mode32 != 0;
+#endif
+}
+
 A1(PUBLIC, void, GetMMUMode, INTEGER *, ip)	/* IMV-592 */
 {
-    *ip = CWC(TRUE32b);
+    *ip = CW (MMU32Bit ? TRUE32b : 0);
 }
 
 A1(PUBLIC, void, SwapMMUMode, Byte *, bp)	/* IMV-593 */
 {
-    *bp = CB(TRUE32b);
+    Byte old = MMU32Bit;
+    ROMlib_set_mmu_mode (*bp);
+    *bp = old;
 }
 
 A1(PUBLIC, LONGINT, StripAddress, LONGINT, l)	/* IMV-593 */
 {
-    return l;
+    return MMU32Bit ? l : l & 0x00FFFFFF;
 }

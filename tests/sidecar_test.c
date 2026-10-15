@@ -34,6 +34,11 @@ static int test_mkdir (const char *path, int mode) { return mkdir (path); }
 
 LONGINT ROMlib_GMTcorrect;
 uint32 ROMlib_offset;
+uint32 syn68k_address_mask = 0xFFFFFFFFUL;
+unsigned syn68k_host_alias_count;
+uint32 syn68k_host_alias_base, syn68k_host_alias_size;
+void *syn68k_guest_to_host (uint32 address) { return SYN68K_TO_US_RAW (address); }
+uint32 syn68k_host_to_guest (ptr_sized_uint address) { return US_TO_SYN68K_RAW (address); }
 OSErr ROMlib_maperrno (void) { return ioErr; }
 boolean_t ROMlib_creator_and_type_from_filename
   (int len, const char *name, uint32 *creator, uint32 *type) { return FALSE; }

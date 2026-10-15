@@ -894,6 +894,7 @@ PRIVATE void doquitreallyquits( void )
 A3(PRIVATE, BOOLEAN, doevent, INTEGER, em, EventRecord *, evt,
 				    BOOLEAN, remflag)    /* no DA support */
 {
+    EventRecord discarded_event;
     BOOLEAN retval;
     LONGINT now;
 #if defined(NEXTSTEP)
@@ -904,6 +905,10 @@ A3(PRIVATE, BOOLEAN, doevent, INTEGER, em, EventRecord *, evt,
 #endif
     static int beenhere = 0;
     ALLOCABEGIN
+
+    /* Some older applications drain the queue without requesting a record. */
+    if (!evt)
+      evt = &discarded_event;
 
     /* We tend to call this routine from various ROMlib modal loops, so this
      * is a good place to check for timer interrupts. */

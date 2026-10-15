@@ -224,7 +224,8 @@ A4(PRIVATE, void, dobuttons, INTEGER, id, INTEGER, offsetx,
 			  ((CL(evt.message) & charCodeMask) == NUMPAD_ENTER)))
 			) {
 			if ((pp = (struct pdef *)
-					    findid(CW(bp->buts[i].butprocid))))
+					    findid(CW(bp->buts[i].butprocid)))
+			    && pp->proc)
 			    /* NOTE:  we will have to do a better
 				      job here sometime */
 			    (*(void (*)(void))MR(pp->proc))();
@@ -261,9 +262,13 @@ P1(PUBLIC pascal, void, SysError, short, errorcode)
     char quickbytes[grafSize];
     INTEGER offsetx, offsety;
     Rect main_gd_rect;
+    WindowPtr saved_wmgr_port = WMgrPort;
+    CWindowPtr saved_wmgr_cport = WMgrCPort;
 
 #if defined (BINCOMPAT)
     LONGINT tmpa5;
+    LONGINT saved_a5 = a5;
+    Ptr saved_current_a5 = CurrentA5;
 #endif /* BINCOMPAT */
 
     main_gd_rect = PIXMAP_BOUNDS (GD_PMAP (MR (MainDevice)));
@@ -372,4 +377,10 @@ P1(PUBLIC pascal, void, SysError, short, errorcode)
                 offsetx, offsety, false);
 
     TRAPEND();
+#if defined (BINCOMPAT)
+    a5 = saved_a5;
+    CurrentA5 = saved_current_a5;
+#endif
+    WMgrPort = saved_wmgr_port;
+    WMgrCPort = saved_wmgr_cport;
 }

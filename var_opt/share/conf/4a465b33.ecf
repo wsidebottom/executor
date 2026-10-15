@@ -1,0 +1,13 @@
+// Coloring Book 3.2 (creator 'JF[3').
+// Its Universe XFCN emits one error line for an unknown selector, but one
+// line per attribute bit for a recognized selector.  The startup script
+// assumes fixed positions: deep GWorld support on line 61 and RAM on 64.
+// Report absent features as zero so those fields retain their positions.
+// Keep these overrides local; other applications rely on unknown selectors.
+Gestalt('conn') = { 0, 0 };
+Gestalt('hdwr') = { 0, 0 };
+Gestalt('misc') = { 0, 0 };
+Gestalt('os  ') = { 0, 0 };
+Gestalt('powr') = { 0, 0 };
+Gestalt('ppc ') = { 0, 0 };
+Gestalt('prty') = { 0, 0 };

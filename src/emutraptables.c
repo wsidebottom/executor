@@ -533,7 +533,7 @@ toolstuff_t toolstuff[0x400] = {
     { { _Secs2Date, -1 }, (void *) 0 },
     { { _Date2Secs, -1 }, (void *) 0 },
     { { C_SysBeep, PTOC_SysBeep }, (void *) 0 },
-    { { C_SysError, PTOC_SysError }, (void *) 0 },
+    { { _SysError, (ULONGINT) -1 }, (void *) 0 },
     { { _Unimplemented, -1 }, (void *) 0 },
     { { C_TEGetText, PTOC_TEGetText }, (void *) 0 },
     { { C_TEInit, PTOC_TEInit }, (void *) 0 },

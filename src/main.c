@@ -41,6 +41,7 @@ char ROMlib_rcsid_main[] =
 #include "rsys/cquick.h"
 #include "rsys/tesave.h"
 #include "rsys/mman.h"
+#include "rsys/osutil.h"
 #include "rsys/menu.h"
 #include "rsys/next.h"
 #include "rsys/setuid.h"
@@ -340,6 +341,8 @@ static option_t common_opts[] =
       "specify the system version that executor reports to applications",
     opt_sep, NULL },
 #if defined (SYN68K)
+  { "24bit", "force 24-bit Macintosh addressing", opt_no_arg, NULL },
+  { "32bit", "force 32-bit Macintosh addressing", opt_no_arg, NULL },
   { "notnative",
       "don't use native code in syn68k",
     opt_no_arg, NULL },
@@ -1553,6 +1556,25 @@ A2 (PUBLIC, int, main, int, argc, char **, argv)
 
 #if defined (SYN68K)  
   use_native_code_p = ! opt_val (common_db, "notnative", NULL);
+  if (opt_val (common_db, "24bit", NULL) && opt_val (common_db, "32bit", NULL))
+    {
+      fprintf (stderr, "Choose only one of -24bit and -32bit\n");
+      exit (1);
+    }
+  ROMlib_addressing_mode = opt_val (common_db, "24bit", NULL) ? 0
+    : opt_val (common_db, "32bit", NULL) ? 1 : -1;
+#if defined (CYGWIN32) && defined (SDL)
+  /* Windows otherwise sizes the default application heap from host RAM,
+     which can place the stack far beyond a 24-bit Macintosh's address space. */
+  if (ROMlib_addressing_mode != 1
+      && !opt_val (common_db, "memory", NULL)
+      && !opt_val (common_db, "applzone", NULL))
+    ROMlib_applzone_size = 6 * 1024 * 1024;
+  if (ROMlib_addressing_mode != 1
+      && !opt_val (common_db, "memory", NULL)
+      && !opt_val (common_db, "syszone", NULL))
+    ROMlib_syszone_size = 2 * 1024 * 1024;
+#endif
 #endif  
 
   afpd_conventions_p = opt_val (common_db, "afpd", NULL);

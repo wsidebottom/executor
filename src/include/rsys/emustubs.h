@@ -1,6 +1,8 @@
 #if !defined(_RSYS_EMUSTUBS_H_)
 #define _RSYS_EMUSTUBS_H_
 
+extern syn68k_addr_t _SysError (syn68k_addr_t ignoreme, void **ignoreme2);
+
 /*
  * Copyright 1995, 1998 by Abacus Research and Development, Inc.
  * All rights reserved.
