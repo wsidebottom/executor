@@ -45,6 +45,11 @@ static int semid = -1;  /* Semaphore id */
 #endif
 static int sound_on = 0; /* 1 if we are generating interrupts */
 static boolean_t have_sound_p; /* TRUE if sound is supported */
+static SDL_mutex *audio_mutex;
+static SDL_cond *audio_ready, *audio_filled;
+static boolean_t audio_closing, thread_started;
+static pthread_t audio_thread;
+static Uint8 *sdl_stream;
 
 enum { NON_RUNNING_SOUND_RATE = 22255 };
 
@@ -126,8 +131,13 @@ sound_sdl_works_p (sound_driver_t *s)
 static void
 sound_sdl_go (sound_driver_t *s)
 {
-  sound_on = 1;
-  patl_signal ();
+  SDL_LockMutex (audio_mutex);
+  if (!sound_on)
+    {
+      sound_on = 1;
+      patl_signal ();
+    }
+  SDL_UnlockMutex (audio_mutex);
 
  SDL_PauseAudio(0);
 }
@@ -135,7 +145,16 @@ sound_sdl_go (sound_driver_t *s)
 static void
 sound_sdl_stop (sound_driver_t *s)
 {
+  SDL_LockMutex (audio_mutex);
   sound_on = 0;
+  /* An outstanding SDL callback must return silence, rather than leave the
+     device repeating its previous buffer while the emulator is idle. */
+  if (sdl_stream)
+    memset (sdl_stream, 0x80, num_samples);
+  sdl_stream = NULL;
+  SDL_CondBroadcast (audio_filled);
+  SDL_CondBroadcast (audio_ready);
+  SDL_UnlockMutex (audio_mutex);
 }
 
 /* Do any bookkeeping needed to start feeding a hungry device */
@@ -165,18 +184,19 @@ sound_sdl_get_hunger_info (sound_driver_t *s)
   return info;
 }
 
-PRIVATE Uint8 *sdl_stream = NULL;
-
 static ssize_t
 sdl_write (const void *buf, size_t len)
 {
   //  fprintf (stderr, "sdl_write: stream = %p, len = %d, buf[0]= 0x%02x, buf[1] = 0x%02x\n", sdl_stream, (int) len, ((uint8_t *) buf)[0], ((uint8_t *) buf)[1]);
 
+  SDL_LockMutex (audio_mutex);
   if (sdl_stream)
     {
       memcpy (sdl_stream, buf, len);
       sdl_stream = NULL;
+      SDL_CondSignal (audio_filled);
     }
+  SDL_UnlockMutex (audio_mutex);
 
   return len;
 }
@@ -213,6 +233,18 @@ union semun
 static void
 sound_sdl_shutdown (sound_driver_t *s)
 {
+  if (!audio_mutex)
+    return;
+  sound_sdl_stop (s);
+  SDL_LockMutex (audio_mutex);
+  audio_closing = TRUE;
+  SDL_CondBroadcast (audio_ready);
+  SDL_UnlockMutex (audio_mutex);
+  patl_signal ();
+  if (thread_started)
+    pthread_join (audio_thread, NULL);
+  thread_started = FALSE;
+  SDL_CloseAudio ();
 #if defined (__MINGW32__)
   sem_destroy (&semid);
 #else
@@ -222,11 +254,13 @@ sound_sdl_shutdown (sound_driver_t *s)
 
   if (have_sound_p)
     {
-      /* possibly kill the thread here */
       have_sound_p = FALSE;
     }
 
-  sdl_stream = NULL;
+  SDL_DestroyCond (audio_ready);
+  SDL_DestroyCond (audio_filled);
+  SDL_DestroyMutex (audio_mutex);
+  audio_mutex = NULL;
 }
 
 static void
@@ -246,12 +280,13 @@ sound_sdl_shutdown_at_exit (void)
   sound_sdl_shutdown (&sound_driver);
 }
 
-PRIVATE void
+PRIVATE boolean_t
 sdl_wait_until_callback_has_been_called (void)
 {
-#warning TODO usleep is not the answer
-  while (sdl_stream == 0)
-    usleep(1);
+  /* Called with audio_mutex held. Stop/shutdown also wake this wait. */
+  while (!sdl_stream && sound_on && !audio_closing)
+    SDL_CondWait (audio_ready, audio_mutex);
+  return sdl_stream && sound_on && !audio_closing;
 }
 
 /* Infinite loop for the "sound" thread.  Waits until the audio device
@@ -264,15 +299,18 @@ loop (void *unused)
   while (TRUE)
     {
       patl_wait ();
-      //      fprintf (stderr, "waiting until callback has been called\n");
-      sdl_wait_until_callback_has_been_called ();
-
-      /* Request interrupt */
-      if (sound_on)
+      SDL_LockMutex (audio_mutex);
+      if (sdl_wait_until_callback_has_been_called ())
 	{
 	  cpu_state.interrupt_pending[M68K_SOUND_PRIORITY] = 1;
 	  cpu_state.interrupt_status_changed = INTERRUPT_STATUS_CHANGED;
 	}
+      if (audio_closing)
+        {
+          SDL_UnlockMutex (audio_mutex);
+          break;
+        }
+      SDL_UnlockMutex (audio_mutex);
     }
 
   return NULL; /* won't get here */
@@ -295,10 +333,16 @@ sound_sdl_hunger_callback(void *unused, Uint8 *stream, int len)
 
   if (len != num_samples)
     gui_fatal ("len = %d, expected %d", len, num_samples);
-  sdl_stream = stream;
-  while (sdl_stream != 0)
-    usleep (1);
-#warning TODO signal something to say that we can write
+  SDL_LockMutex (audio_mutex);
+  memset (stream, 0x80, len);
+  if (sound_on && !audio_closing)
+    {
+      sdl_stream = stream;
+      SDL_CondSignal (audio_ready);
+      while (sdl_stream && sound_on && !audio_closing)
+        SDL_CondWait (audio_filled, audio_mutex);
+    }
+  SDL_UnlockMutex (audio_mutex);
 }
 
 boolean_t
@@ -380,7 +424,6 @@ sound_sdl_init (sound_driver_t *s)
   }
 
   memset (buf, 0x80, sizeof (buf));
-  sdl_write (buf, num_samples);
 
 #if defined (__MINGW32__)
   if (sem_init (&semid, 0, 0) < 0)
@@ -394,7 +437,12 @@ sound_sdl_init (sound_driver_t *s)
 	       "\"-nosound\" command line option.");
 #endif
 
-  atexit (sound_sdl_shutdown_at_exit); /* make sure semid gets freed */
+  audio_mutex = SDL_CreateMutex ();
+  audio_ready = SDL_CreateCond ();
+  audio_filled = SDL_CreateCond ();
+  if (!audio_mutex || !audio_ready || !audio_filled)
+    gui_fatal ("Couldn't create audio synchronization objects.");
+  audio_closing = FALSE;
 
   my_callback = callback_install (sound_callback, NULL);
   *(syn68k_addr_t *) SYN68K_TO_US(M68K_SOUND_VECTOR * 4) = CL (my_callback);
@@ -403,7 +451,6 @@ sound_sdl_init (sound_driver_t *s)
 #if !defined (__MINGW32__)
     sigset_t all_signals, current_mask;
 #endif
-    pthread_t thread;
 
 #if !defined (__MINGW32__)
     sigfillset (&all_signals);
@@ -411,13 +458,18 @@ sound_sdl_init (sound_driver_t *s)
     sigprocmask (SIG_SETMASK, &all_signals, &current_mask);
 #endif
     //    fprintf (stderr, "about to start thread\n");
-    sysret = pthread_create (&thread, NULL, loop, NULL);
+    sysret = pthread_create (&audio_thread, NULL, loop, NULL);
 #if !defined (__MINGW32__)
     sigprocmask (SIG_SETMASK, &current_mask, 0);
 #endif
   }
   if (sysret != 0)
-    goto fail;
+    {
+      sound_sdl_shutdown (s);
+      goto fail;
+    }
+  thread_started = TRUE;
+  atexit (sound_sdl_shutdown_at_exit);
 
   /*patl_signal ();*/
 
