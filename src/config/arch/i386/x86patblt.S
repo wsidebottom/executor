@@ -7,7 +7,7 @@
 #include "host_bltmacros.h"
 #include "i386_djgpp_version.h"
 
-#if !defined (USE_PORTABLE_PATBLT)
+#if !defined (USE_PORTABLE_PATBLT) && !defined (__MINGW32__)
 
 #define CODE_BUFFER_SIZE 16384 /* if you change this, be sure to change
 				  the TOUCH_PAGES code below */

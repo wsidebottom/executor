@@ -86,9 +86,11 @@ extern arch_type_t arch_type;
  * blitters were causing Executor to crash.  I haven't figured out
  * why yet, but most likely they can be rehabilitated.
  */
-#else /* !defined(MACOSX) */
+#elif !defined (__MINGW32__)
+/* The assembly blitters generate and execute code on the stack. Windows
+   DEP forbids that; use the existing portable blitters on MinGW. */
 #  define ARCH_PROVIDES_RAW_PATBLT
 #  define ARCH_PROVIDES_RAW_SRCBLT
-#endif /* !defined(MACOSX) */
+#endif /* platforms supporting the assembly blitters */
 
 #endif /* !_ARCH_I386_H_ */

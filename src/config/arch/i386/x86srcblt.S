@@ -1,7 +1,7 @@
 #include "host_bltmacros.h"
 #include "i386_djgpp_version.h"
 
-#if !defined (USE_PORTABLE_SRCBLT)
+#if !defined (USE_PORTABLE_SRCBLT) && !defined (__MINGW32__)
 
 #define CODE_BUFFER_SIZE 16384
 
