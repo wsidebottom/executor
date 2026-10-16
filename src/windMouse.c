@@ -32,6 +32,11 @@ P2(PUBLIC pascal trap, INTEGER, FindWindow, Point, p, HIDDEN_WindowPtr *, wpp)
     WindowPeek wp;
     LONGINT pointaslong, val;
     INTEGER retval;
+    HIDDEN_WindowPtr discarded_window;
+
+    /* Some applications only need the window part, not the window pointer. */
+    if (!wpp)
+      wpp = &discarded_window;
 
     pointaslong = ((LONGINT)p.v << 16)|(unsigned short)p.h;
 

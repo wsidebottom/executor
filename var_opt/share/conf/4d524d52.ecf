@@ -1,0 +1,4 @@
+// Math Rabbit 2 (creator 'MRMR').
+// Its desktop startup checks the system 'vers' 1 resource for major version
+// exactly 6, despite saying "6.0 or higher" in the failure alert.
+SystemVersion = 6.0.7;

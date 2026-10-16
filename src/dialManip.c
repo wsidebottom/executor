@@ -115,7 +115,7 @@ P5(PUBLIC pascal trap, void, GetDItem, DialogPtr, dp,	/* IMI-421 */
 	    /* of course this is very rude, but that's what the Mac did
 	       when we tested it.  Perhaps they've fixed that now and we
 	       too should fix it.  ARGH! */
-	   *(INTEGER *) (US_TO_SYN68K(itype)) = CW((INTEGER) ip->itmtype);
+	   *(INTEGER *) SYN68K_TO_US (0) = CW ((INTEGER) ip->itmtype);
 	  }
 	if (item) /* We didn't test what happens when item is 0 on Mac */
 	  (*item).p = ip->itmhand;
