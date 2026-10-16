@@ -222,6 +222,7 @@ include_sources = hintemplate.h \
                   include/rsys/lowglobals.h \
                   include/rsys/m68kint.h \
                   include/rsys/macros.h \
+                  include/rsys/mace.h \
                   include/rsys/mactype.h \
                   include/rsys/mathlib.h \
                   include/rsys/memory_layout.h \
@@ -340,7 +341,8 @@ include_sources = hintemplate.h \
 # try to create .o files out of them, but we just need the .c files that
 # map_to_c will create.
 
-EXTRA_DIST = active.map               \
+EXTRA_DIST = COPYING.LGPLv2.1         \
+             active.map              \
              apple.map                \
              arrow_down_active.map    \
              arrow_down_inactive.map  \

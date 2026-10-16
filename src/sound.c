@@ -18,6 +18,8 @@ char ROMlib_rcsid_sound[] =
 #include "rsys/sounddriver.h"
 #include "rsys/blockinterrupts.h"
 #include "rsys/mman.h"
+#include "rsys/mace.h"
+#include <math.h>
 
 
 /* TRUE when we want to pretend this host has no sound support. */
@@ -568,7 +570,125 @@ snd_duration (SoundHeaderPtr hp)
   return CL (hp->length);
 }
 
-#define CMD_DONE(c) (SND_CHAN_FLAGS_X (c) &= CWC (~CHAN_CMDINPROG_FLAG))
+typedef struct decoded_sound decoded_sound_t;
+struct decoded_sound
+{
+  SndChannelPtr channel;
+  uint8 *samples;
+  uint32 length;
+  decoded_sound_t *next;
+};
+static decoded_sound_t *decoded_sounds;
+
+static void
+release_decoded_sound (SndChannelPtr channel)
+{
+  decoded_sound_t **link;
+  for (link = &decoded_sounds; *link; link = &(*link)->next)
+    if ((*link)->channel == channel)
+      {
+        decoded_sound_t *sound = *link;
+        *link = sound->next;
+        free (sound->samples);
+        free (sound);
+        break;
+      }
+}
+
+static uint32
+sound_header_long (const uint8 *p)
+{
+  return ((uint32) p[0] << 24) | ((uint32) p[1] << 16)
+    | ((uint32) p[2] << 8) | p[3];
+}
+
+static uint8 *
+decoded_sound_samples (SndChannelPtr channel, SoundHeaderPtr header,
+                       uint32 *length)
+{
+  const uint8 *h = (const uint8 *) header;
+  uint32 channels = sound_header_long (h + 4);
+  uint32 packets = sound_header_long (h + 22);
+  unsigned compression = (h[56] << 8) | h[57];
+  unsigned sample_size = (h[62] << 8) | h[63];
+  uint32 input_size;
+  const uint8 *input;
+  decoded_sound_t *sound;
+
+  for (sound = decoded_sounds; sound; sound = sound->next)
+    if (sound->channel == channel)
+      {
+        *length = sound->length;
+        return sound->samples;
+      }
+  if ((compression != 3 && compression != 4)
+      || channels < 1 || channels > 2 || sample_size != 8
+      || !packets || packets > UINT32_MAX / 6)
+    return NULL;
+  input_size = packets * channels * (compression == 3 ? 2 : 1);
+  input = header->samplePtr ? MR ((uint8 *) header->samplePtr) : h + 64;
+  sound = malloc (sizeof *sound);
+  if (!sound)
+    return NULL;
+  sound->length = packets * 6;
+  sound->samples = malloc (sound->length);
+  if (!sound->samples
+      || !ROMlib_mace_decode (input, input_size, channels, compression == 3,
+                              sound->samples, sound->length))
+    {
+      free (sound->samples);
+      free (sound);
+      return NULL;
+    }
+  sound->channel = channel;
+  sound->next = decoded_sounds;
+  decoded_sounds = sound;
+  *length = sound->length;
+  return sound->samples;
+}
+
+/* The original note synthesizer uses MIDI pitches and half-milliseconds.
+   Keep generated square-wave notes in the same per-command cache as MACE. */
+static uint8 *
+decoded_note_samples (SndChannelPtr channel, boolean_t rest, uint32 *length)
+{
+  decoded_sound_t *sound;
+  unsigned duration = (uint16) CW (channel->cmdInProg.param1);
+  unsigned pitch = CL (channel->cmdInProg.param2) & 127;
+  uint32 n, count = (uint64) duration * SND_RATE / 2000;
+  double frequency = 440.0 * pow (2.0, ((int) pitch - 69) / 12.0);
+  for (sound = decoded_sounds; sound; sound = sound->next)
+    if (sound->channel == channel)
+      {
+        *length = sound->length;
+        return sound->samples;
+      }
+  *length = 0;
+  if (!count)
+    return NULL;
+  sound = malloc (sizeof *sound);
+  if (!sound)
+    return NULL;
+  sound->samples = malloc (count);
+  if (!sound->samples)
+    {
+      free (sound);
+      return NULL;
+    }
+  for (n = 0; n < count; ++n)
+    sound->samples[n] = rest ? 0x80
+      : ((uint64) (n * frequency * 2 / SND_RATE) & 1) ? 0xC0 : 0x40;
+  sound->channel = channel;
+  sound->length = *length = count;
+  sound->next = decoded_sounds;
+  decoded_sounds = sound;
+  return sound->samples;
+}
+
+#define CMD_DONE(c) do { \
+  release_decoded_sound (c); \
+  SND_CHAN_FLAGS_X (c) &= CWC (~CHAN_CMDINPROG_FLAG); \
+} while (0)
 
 static void
 do_current_command (SndChannelPtr chanp, struct hunger_info info)
@@ -580,8 +700,42 @@ do_current_command (SndChannelPtr chanp, struct hunger_info info)
 
   switch (CW (chanp->cmdInProg.cmd))
     {
+    case noteCmd:
+    case restCmd:
+    case waitCmd:
+      {
+        uint32 length;
+        sp = decoded_note_samples (chanp,
+                                  chanp->cmdInProg.cmd != CWC (noteCmd), &length);
+        if (!sp || resample (sp, info.buf, length, info.bufsize,
+                             SND_RATE << 16, SND_RATE << 16,
+                             &SND_CHAN_CURRENT_START (chanp),
+                             &SND_CHAN_PREV_SAMP (chanp),
+                             &SND_CHAN_TIME (chanp), info.t3))
+          CMD_DONE (chanp);
+        break;
+      }
+
     case bufferCmd:
       hp = MR ((SoundHeaderPtr) chanp->cmdInProg.param2);
+
+      if (hp->encode == cmpSH)
+        {
+          uint32 length;
+          sp = decoded_sound_samples (chanp, hp, &length);
+          if (!sp)
+            {
+              warning_unimplemented ("Unsupported compressed sound header");
+              CMD_DONE (chanp);
+            }
+          else if (resample (sp, info.buf, length, info.bufsize,
+                             CL (hp->sampleRate), SND_RATE << 16,
+                             &SND_CHAN_CURRENT_START (chanp),
+                             &SND_CHAN_PREV_SAMP (chanp),
+                             &SND_CHAN_TIME (chanp), info.t3))
+            CMD_DONE (chanp);
+          break;
+        }
       
       if (hp->encode != stdSH)
 	{
@@ -913,9 +1067,10 @@ P2 (PUBLIC, pascal trap OSErr, SndDoImmediate, SndChannelPtr, chanp,
 	      retval = noErr;
 	      break;
 
-	    case bufferCmd:
-	      warning_sound_log ("bufferCmd");
-	      chanp->cmdInProg = cmd;
+    case bufferCmd:
+      warning_sound_log ("bufferCmd");
+      release_decoded_sound (chanp);
+      chanp->cmdInProg = cmd;
 	      SND_CHAN_FLAGS_X (chanp) |= CWC (CHAN_CMDINPROG_FLAG);
 	      SND_CHAN_CURRENT_START (chanp) =
 		SND_PROMOTE (SND_CHAN_TIME (chanp));
