@@ -202,7 +202,7 @@ include_sources = hintemplate.h \
                   include/rsys/hfs_plus.h \
                   include/rsys/hook.h \
                   include/rsys/host.h \
-                  include/rsys/icon.h \
+                    include/rsys/icon.h include/rsys/appicon.h \
                   include/rsys/image.h \
                   include/rsys/ini.h \
                   include/rsys/int386.h \
@@ -222,7 +222,7 @@ include_sources = hintemplate.h \
                   include/rsys/lowglobals.h \
                   include/rsys/m68kint.h \
                   include/rsys/macros.h \
-                  include/rsys/mace.h \
+                  include/rsys/mace.h include/rsys/sdlpixels.h \
                   include/rsys/mactype.h \
                   include/rsys/mathlib.h \
                   include/rsys/memory_layout.h \

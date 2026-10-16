@@ -1,0 +1,3 @@
+// SimCity 1.4c (creator 'MCRP') quits during startup in display modes
+// deeper than four bits per pixel.  Use its supported 16-colour mode.
+BitsPerPixel = 4;

@@ -869,6 +869,26 @@ P1(PUBLIC pascal trap, void, LoadSeg, INTEGER volatile, segno)
     fprintf (stderr, "trace: LoadSeg HLock complete host=%p\n",
 	     (void *) STARH(newcode));
     fflush (stderr);
+    /* SimCity 1.4c's zoom handler pushes the address of visRgn instead
+       of the region handle before SetClip.  The subsequent EraseRgn then
+       uses a bogus clip region.  Correct only this exact CODE 5 sequence;
+       leave the application's resource fork unchanged. */
+    if (ROMlib_creator == TICK("MCRP") && segno == 5
+        && GetHandleSize (newcode) >= 0x2ce2)
+      {
+        static const unsigned char zoom_clip[] = {
+          0x20, 0x6d, 0xd1, 0x04, 0x48, 0x68, 0x00, 0x18,
+          0xa8, 0x79, 0x20, 0x6d, 0xd1, 0x04, 0x2f, 0x28,
+          0x00, 0x18, 0xa8, 0xd4
+        };
+        unsigned char *code = (unsigned char *) STARH (newcode);
+
+        if (memcmp (code + 0x2cce, zoom_clip, sizeof zoom_clip) == 0)
+          {
+            code[0x2cd2] = 0x2f;  /* move.l 24(a0),-(sp), not pea 24(a0) */
+            code[0x2cd3] = 0x28;
+          }
+      }
     taboff   = CW(((INTEGER *) STARH(newcode))[0]);
     fprintf (stderr, "trace: LoadSeg taboff=%d nentries_raw=%d\n",
 	     taboff, CW(((INTEGER *) STARH(newcode))[1]));

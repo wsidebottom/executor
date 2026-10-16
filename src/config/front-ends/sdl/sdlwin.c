@@ -10,6 +10,7 @@ char ROMlib_rcsid_sdlwin[] = "$Id: sdlwin.c 63 2004-12-24 18:19:43Z ctm $";
 #include "rsys/srcblt.h"
 #include "rsys/refresh.h"
 #include "rsys/mman.h"
+#include "rsys/sdlpixels.h"
 
 #if defined (CYGWIN32)
 #include "win_screen.h"
@@ -126,7 +127,9 @@ vdriver_acceptable_mode_p (int width, int height, int bpp,
               + (uint64) SDL_MAX_SCREEN_WIDTH * (height - 1) + width > 0x1000000)
     retval = FALSE;
 #endif
-  else if ( ! SDL_VideoModeOK(width, height, bpp, video_flags) )
+  else if (bpp != 1 && bpp != 2 && bpp != 4 && bpp != 8)
+    retval = FALSE;
+  else if ( ! SDL_VideoModeOK(width, height, 8, video_flags) )
     retval = FALSE;
   else if ( grayscale_p != vdriver_grayscale_p )
     retval = FALSE;
@@ -190,7 +193,8 @@ vdriver_set_mode (int width, int height, int bpp, boolean_t grayscale_p)
       if (vdriver_fbuf == NULL)
 	return FALSE;
     }
-  new_screen = SDL_SetVideoMode(width, height, bpp, video_flags);
+  /* SDL presents byte-sized palette indices; Macintosh pixels may be packed. */
+  new_screen = SDL_SetVideoMode(width, height, 8, video_flags);
   if (new_screen == NULL)
     return(FALSE);
   screen = new_screen;
@@ -198,9 +202,9 @@ vdriver_set_mode (int width, int height, int bpp, boolean_t grayscale_p)
   /* Fill the vdriver globals */
   vdriver_width = screen->w;
   vdriver_height = screen->h;
-  vdriver_bpp = screen->format->BitsPerPixel;
+  vdriver_bpp = bpp;
   vdriver_log2_bpp = ROMlib_log2[vdriver_bpp];
-  vdriver_row_bytes = SDL_MAX_SCREEN_WIDTH;
+  vdriver_row_bytes = (SDL_MAX_SCREEN_WIDTH * bpp + 7) / 8;
   free (vdriver_shadow_fbuf);
   vdriver_shadow_fbuf = NULL;
 
@@ -256,8 +260,9 @@ vdriver_update_screen_rects (int num_rects, const vdriver_rect_t *r,
       if (right <= left || bottom <= top)
 	continue;
       for (y = top; y < bottom; ++y)
-	memcpy ((uint8 *) screen->pixels + y * screen->pitch + left,
-		vdriver_fbuf + y * vdriver_row_bytes + left, right - left);
+	ROMlib_sdl_copy_indexed_row ((uint8 *) screen->pixels + y * screen->pitch,
+				     vdriver_fbuf + y * vdriver_row_bytes,
+				     left, right, vdriver_bpp);
       rects[count].x = left;
       rects[count].w = right - left;
       rects[count].y = top;

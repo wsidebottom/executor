@@ -83,6 +83,10 @@ sdl_syswm_init(void)
 #elif defined(_WIN32)
 /* * */
       Win_Window = SDL_Window = info.window;
+      {
+        extern void ROMlib_sdl_apply_application_icon (void);
+        ROMlib_sdl_apply_application_icon ();
+      }
 
 #endif /* OS */
       retval = 0;

@@ -21,6 +21,92 @@ char ROMlib_rcsid_icon[] =
 #include "rsys/mman.h"
 #include "rsys/icon.h"
 
+#if defined (SDL) && defined (_WIN32)
+#include "rsys/appicon.h"
+
+/* Use the application's bundle mapping, rather than assuming icon ID 128. */
+void
+ROMlib_set_application_icon (unsigned long creator)
+{
+  Handle h, mono, color;
+  short id = 128;
+  unsigned local_id = 0;
+  int i, j, depth = 1, found = FALSE;
+  unsigned char mask[256], pixels[1024], rgba[32 * 32 * 4];
+
+  for (i = 1; i <= Count1Resources (TICK ("FREF")); ++i)
+    {
+      h = Get1IndResource (TICK ("FREF"), i);
+      if (h && STARH (h) && GetHandleSize (h) >= 6)
+        {
+          const unsigned char *p = (unsigned char *) STARH (h);
+          if (memcmp (p, "APPL", 4) == 0)
+            {
+              local_id = ROMlib_icon_word (p + 4);
+              break;
+            }
+        }
+    }
+  for (i = 1; i <= Count1Resources (TICK ("BNDL")); ++i)
+    {
+      h = Get1IndResource (TICK ("BNDL"), i);
+      if (h && STARH (h) && GetHandleSize (h) >= 8
+          && ROMlib_bundle_icon_id ((unsigned char *) STARH (h),
+                                    GetHandleSize (h), creator, local_id, &id))
+        {
+          found = TRUE;
+          break;
+        }
+    }
+  mono = Get1Resource (TICK ("ICN#"), id);
+  if (!mono && !found)
+    mono = Get1IndResource (TICK ("ICN#"), 1);
+  if (!mono || !STARH (mono) || GetHandleSize (mono) < (Size) sizeof mask)
+    {
+      ROMlib_sdl_set_application_icon (NULL, creator);
+      return;
+    }
+  memcpy (mask, STARH (mono), sizeof mask);
+  if (!found)
+    {
+      ResType type;
+      Str255 name;
+      GetResInfo (mono, &id, &type, name);
+      id = CW (id);
+    }
+  color = Get1Resource (TICK ("icl8"), id);
+  if (color && STARH (color) && GetHandleSize (color) >= 1024)
+    depth = 8;
+  else
+    {
+      color = Get1Resource (TICK ("icl4"), id);
+      if (color && STARH (color) && GetHandleSize (color) >= 512)
+        depth = 4;
+    }
+  if (depth != 1)
+    memcpy (pixels, STARH (color), depth == 8 ? 1024 : 512);
+  for (i = 0; i < 1024; ++i)
+    {
+      unsigned bit = 0x80 >> (i & 7);
+      if (depth == 1)
+        for (j = 0; j < 3; ++j)
+          rgba[4*i+j] = mask[i >> 3] & bit ? 0 : 255;
+      else
+        {
+          unsigned index = depth == 8 ? pixels[i]
+            : (pixels[i >> 1] >> ((i & 1) ? 0 : 4)) & 15;
+          const RGBColor *rgb = depth == 8 ? &ctab_8bpp_values[index].rgb
+            : &ctab_4bpp_values[index].rgb;
+          rgba[4*i] = CW (rgb->red) >> 8;
+          rgba[4*i+1] = CW (rgb->green) >> 8;
+          rgba[4*i+2] = CW (rgb->blue) >> 8;
+        }
+      rgba[4*i+3] = mask[128 + (i >> 3)] & bit ? 255 : 0;
+    }
+  ROMlib_sdl_set_application_icon (rgba, creator);
+}
+#endif
+
 #define ICON_RETURN_ERROR(error)					      \
   ({									      \
     OSErr _error_ = (error);						      \

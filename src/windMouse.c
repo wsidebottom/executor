@@ -123,7 +123,8 @@ P3(PUBLIC pascal trap, void, ZoomWindow, WindowPtr, wp,		/* IMIV-50 */
   Boolean instdstate;
   Rect *u;
 #if !defined (THEPORTNEEDNTBEWMGRPORT)
-  GrafPtr gp;
+  /* Window-definition calls may change the current port. */
+  GrafPtr gp = thePort;
 #endif /* THEPORTNEEDNTBEWMGRPORT */
   
   instdstate = WINDOW_ZOOMED((WindowPeek) wp);
@@ -172,7 +173,6 @@ P3(PUBLIC pascal trap, void, ZoomWindow, WindowPtr, wp,		/* IMIV-50 */
       PaintBehind (WINDOW_NEXT_WINDOW (wp), behind);
       
 #if !defined (THEPORTNEEDNTBEWMGRPORT)
-      gp = thePort;
       SetPort (MR (wmgr_port));
 #endif /* THEPORTNEEDNTBEWMGRPORT */
       SetClip (WINDOW_STRUCT_REGION (wp));

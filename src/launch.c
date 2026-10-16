@@ -83,6 +83,7 @@ char ROMlib_rcsid_launch[] =
 
 #include "rsys/cfm.h"
 #include "rsys/launch.h"
+#include "rsys/icon.h"
 #include "rsys/local_charset.h"
 #include "rsys/version.h"
 #include "rsys/appearance.h"
@@ -803,6 +804,9 @@ PRIVATE void launchchain(StringPtr fName, INTEGER vRefNum, BOOLEAN resetmemory,
 	      == SZisHighLevelEventAware);
     }
     
+#if defined (SDL) && defined (_WIN32)
+    ROMlib_set_application_icon (ROMlib_creator);
+#endif
     h = GetResource(CL(finfo.fdCreator), 0);
     if (h && launch_handle_body_valid_p (h)) {
 	namelen = *MR(*(unsigned char **)h);

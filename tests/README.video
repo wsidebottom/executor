@@ -1,0 +1,12 @@
+Run from the workspace root in WSL:
+
+  bash executor/tests/run-sdl-pixel-tests.sh
+
+Checks the SDL presentation conversion at 1, 2, 4 and 8 bits per pixel.
+Every clipping range is compared with known palette indices, with guards
+before and after the destination. Odd pixel boundaries exercise packed
+pixels shared with areas outside the updated rectangle.
+
+Manual regression: launch SimCity 1.4c with creator MCRP's four-bit
+configuration, start a city and build a road. Also check Browser at eight
+bits and host resizing without changing Macintosh window sizes.

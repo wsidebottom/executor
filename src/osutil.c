@@ -962,8 +962,14 @@ P1(PUBLIC pascal trap, void, SysBeep, INTEGER, i)	/* SYSTEM DEPENDENT */
 #endif
 }
 
-PUBLIC char ROMlib_phoneyrom[10] = {
+/* Math Rabbit and other applications can leave through the ROM startup
+ * entry at ROMBase + 10.  Return to Executor's shell instead of falling
+ * through the end of the placeholder ROM into native data.
+ */
+PUBLIC char ROMlib_phoneyrom[14] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0x06, 0x7C,
+    0xA9, 0xF4,                 /* _ExitToShell */
+    0x60, 0xFC,                 /* bra.s back to _ExitToShell if it returns */
 };
 
 A2(PUBLIC trap, void, Environs, INTEGER *, rom, INTEGER *, machine)
