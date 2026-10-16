@@ -415,12 +415,13 @@ PUBLIC syn68k_addr_t alinehandler(syn68k_addr_t pc, void *ignored)
     vdriver_system_busy (TRUE);
 #endif
 #endif
-    if (trap_count <= 200
+    if (ERROR_ENABLED_P (ERROR_TRACE_INFO)
+        && (trap_count <= 200
 	|| (trap_count >= 1400 && trap_count <= 1800)
 	|| trapword == 0xA970
 	|| trapword == 0xA860
 	|| trapword == LOADSEGTRAPWORD
-	|| ((trap_count & 0x3FFF) == 0))
+	|| ((trap_count & 0x3FFF) == 0)))
       {
 	fprintf (stderr, "trace: aline #%lu pc=0x%08lx trap=0x%04x\n",
 		 trap_count, (unsigned long) pc, trapword);
