@@ -29,6 +29,10 @@
 static int test_mkdir (const char *path, int mode) { return mkdir (path); }
 #define Umkdir test_mkdir
 
+#undef ROMlib_fcblocks
+static fcbrec test_fcblocks[NFCB];
+#define ROMlib_fcblocks test_fcblocks
+
 #include "../src/fileDouble.c"
 #undef main
 
@@ -175,6 +179,26 @@ int main (void)
   expect_name ("netatalk/New", "netatalk/.AppleDouble/New");
   assert (newfork ("netatalk/.AppleDouble/New", &fd) == noErr);
   assert (ROMlib_resource_fork_present (fd));
+  /* Browser copies allocate a resource fork, then set its EOF before
+     writing it. Both calls must leave a physically valid descriptor. */
+  memset (&fcb, 0, sizeof fcb);
+  fcb.fcfd = fcb.hiddenfd = fd;
+  fcb.fcflags = fcfisres;
+  fcb.fcleof = CL (436697);
+  test_fcblocks[0] = fcb;
+  assert (lseek (fd, 17, SEEK_SET) == 17);
+  assert (ROMlib_seteof (&fcb) == noErr);
+  assert (lseek (fd, 0, SEEK_CUR) == 17);
+  assert (getsetentry (Get, fd, Resource_Fork_ID, &d, NULL));
+  assert (CL (d.offset) == 512 && CL (d.length) == 436697);
+  assert (lseek (fd, 0, SEEK_END) == 512 + 436697);
+  assert (ROMlib_seteof (&fcb) == noErr);
+  assert (ROMlib_geteofostype (&fcb) == noErr);
+  assert (CL (fcb.fcleof) == 436697);
+  fcb.fcleof = CL (8);
+  assert (ROMlib_seteof (&fcb) == noErr);
+  assert (getsetentry (Get, fd, Resource_Fork_ID, &d, NULL));
+  assert (CL (d.length) == 8);
   close (fd);
   /* Out-of-file payloads cannot masquerade as usable resource forks. */
   head->nentries = CWC (2);

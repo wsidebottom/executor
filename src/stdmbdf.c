@@ -19,6 +19,7 @@ char ROMlib_rcsid_stdmbdf[] =
 #include "MemoryMgr.h"
 #include "ToolboxUtil.h"
 #include "FontMgr.h"
+#include "Iconutil.h"
 
 #include "rsys/cquick.h"
 #include "rsys/menu.h"
@@ -30,6 +31,20 @@ char ROMlib_rcsid_stdmbdf[] =
 #include "apple.c"
 
 enum { APPLE_CHAR = 0x14, INFINITY_CHAR = 0xB0 };
+
+/* System 7 icon titles contain a marker and a big-endian IconSuite handle. */
+static boolean_t
+icon_title_p (const unsigned char *title)
+{
+  return title[0] == 5 && title[1] == 1;
+}
+
+static int16
+menu_title_width (MenuHandle menu)
+{
+  StringPtr title = MI_DATA (menu);
+  return icon_title_p (title) ? 16 : StringWidth (title);
+}
 
 /*
  * NOTE:  if sixbyteoffset == 0 then realhilite does the entire menubar
@@ -63,6 +78,28 @@ draw_menu_title (muelem *elt,
   EraseRect (&dstr);
   
   title = (char *) MI_DATA (muhandle);
+
+  if (icon_title_p ((unsigned char *) title))
+    {
+      Handle suite;
+      Rect icon_rect;
+      int transform = hilite_p ? ttSelected : ttNone;
+
+      /* The handle starts at an even byte offset, but need not be aligned. */
+      memcpy (&suite, title + 2, sizeof suite);
+      suite = MR (suite);
+      if (!(MI_ENABLE_FLAGS_X (muhandle) & CLC (1)))
+        transform |= ttDisabled;
+      SetRect (&icon_rect, CW (elt->muleft) + MENULEFT - 3,
+               (CW (MBarHeight) - 16) / 2,
+               CW (elt->muleft) + MENULEFT + 13,
+               (CW (MBarHeight) - 16) / 2 + 16);
+      if (suite)
+        PlotIconSuite (&icon_rect, atNone, transform, suite);
+      RGBForeColor (&ROMlib_black_rgb_color);
+      RGBBackColor (&ROMlib_white_rgb_color);
+      return;
+    }
 
 #if defined (COLOR_APPLE_MENU_ICON)
   gd = CL (MainDevice);
@@ -281,7 +318,7 @@ A1(PRIVATE, void, calc, LONGINT, offset)
     else {
 	mh = MR(mp[-1].muhandle);
 	HLock((Handle) mh);
-	titsize = StringWidth(HxX(mh, menuData)) + SLOP;
+	titsize = menu_title_width (mh) + SLOP;
 	HUnlock((Handle) mh);
 	left = CW(mp[-1].muleft) + titsize;
     }
@@ -290,7 +327,7 @@ A1(PRIVATE, void, calc, LONGINT, offset)
 	mp->muleft = CW(left);
 	mh = MR(mp->muhandle);
 	HLock((Handle) mh);
-	titsize = StringWidth(HxX(mh, menuData)) + SLOP;
+	titsize = menu_title_width (mh) + SLOP;
 	HUnlock((Handle) mh);
 	left += titsize;
     }

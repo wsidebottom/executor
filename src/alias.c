@@ -277,8 +277,19 @@ PRIVATE OSErr
 create_directory (INTEGER sys_vref, LONGINT sys_dirid, const char *sub_dirp,
 		  LONGINT *new_idp)
 {
-  warning_unimplemented (NULL_STRING);
-  return paramErr;
+  HParamBlockRec pb;
+  Str255 name;
+  OSErr err;
+
+  memset (&pb, 0, sizeof pb);
+  str255_from_c_string (name, sub_dirp);
+  pb.ioParam.ioNamePtr = RM ((Ptr) name);
+  pb.ioParam.ioVRefNum = CW (sys_vref);
+  pb.fileParam.ioDirID = CL (sys_dirid);
+  err = PBDirCreate (&pb, FALSE);
+  if (err == noErr)
+    *new_idp = CL (pb.fileParam.ioDirID);
+  return err;
 }
 
 P5 (PUBLIC pascal trap, OSErr, FindFolder,
@@ -326,6 +337,51 @@ P5 (PUBLIC pascal trap, OSErr, FindFolder,
 	}
 	break;
       case kDesktopFolderType:
+	{
+	  INTEGER sys_vref, desktop_vref;
+	  LONGINT sys_dirid, parent_id = 2, desktop_id;
+	  HParamBlockRec volume;
+	  CInfoPBRec directory;
+
+	  retval = get_sys_vref_and_dirid (&sys_vref, &sys_dirid);
+	  if (retval != noErr)
+	    break;
+	  desktop_vref = sys_vref;
+	  if (vRefNum != (int16) 0x8000) /* kOnSystemDisk */
+	    {
+	      memset (&volume, 0, sizeof volume);
+	      volume.volumeParam.ioVRefNum = CW (vRefNum);
+	      retval = PBHGetVInfo (&volume, FALSE);
+	      if (retval != noErr)
+	        break;
+	      desktop_vref = CW (volume.volumeParam.ioVRefNum);
+	    }
+
+	  /* Host volumes can contain the portable System Folder below their
+	     root. Keep that installation's desktop beside its System Folder. */
+	  if (desktop_vref == sys_vref)
+	    {
+	      memset (&directory, 0, sizeof directory);
+	      directory.dirInfo.ioVRefNum = CW (sys_vref);
+	      directory.dirInfo.ioFDirIndex = CWC (-1);
+	      directory.dirInfo.ioDrDirID = CL (sys_dirid);
+	      retval = PBGetCatInfo (&directory, FALSE);
+	      if (retval != noErr)
+	        break;
+	      parent_id = CL (directory.dirInfo.ioDrParID);
+	    }
+	  retval = test_directory (desktop_vref, parent_id, "Desktop Folder",
+	                           &desktop_id);
+	  if (retval == fnfErr && createFolder)
+	    retval = create_directory (desktop_vref, parent_id, "Desktop Folder",
+	                               &desktop_id);
+	  if (retval == noErr)
+	    {
+	      *foundVRefNum = CW (desktop_vref);
+	      *foundDirID = CL (desktop_id);
+	    }
+	}
+	break;
       case kTrashFolderType:
       case kWhereToEmptyTrashFolderType:
       case kTemporaryFolderType:

@@ -18,6 +18,10 @@ sidecar convention for a rename or move into a different-style directory;
 moving/deleting companion pairs; and removing empty sidecar containers when
 deleting a Macintosh directory.
 
+The copy regression allocates a fresh AppleDouble resource fork, sets its EOF
+again before writing, and reopens its descriptor. It checks the physical file
+length, logical fork length and preserved seek position, then shrinks the fork.
+
 For integration testing, launch a copy of a Macintosh application whose
 metadata/resource forks are represented as .finf/name plus .rsrc/name, then
 repeat with ._name AppleDouble. Confirm Finder type/creator, resource loading,

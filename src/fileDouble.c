@@ -228,6 +228,47 @@ ROMlib_sidecar_name (const char *pathname, const char *filename)
     }
   if (style < 0)
     {
+#if defined (CYGWIN32)
+      struct _finddata_t entry;
+      intptr_t search;
+
+      /* A Finder-info lookup is made for every displayed host file.
+         Enumerating every sibling here makes browsing a large Windows
+         directory quadratic. Ask Windows for AppleDouble names only. */
+      directory = sidecar_path (pathname, filename, ".DS_Store");
+      if (directory)
+        directory[(filename - pathname) + 9] = 0;
+      if (sidecar_exists (directory, FALSE))
+        style = 2;
+      free (directory);
+      if (style < 0)
+        {
+          directory = sidecar_path (pathname, filename, "._*");
+          if (directory)
+            directory[(filename - pathname) + 3] = 0;
+          search = directory ? _findfirst (directory, &entry) : -1;
+          if (search != -1)
+            {
+              do
+                {
+                  char *probe = sidecar_path (pathname, filename, entry.name);
+                  boolean_t valid;
+                  if (probe)
+                    probe[(filename - pathname) + strlen (entry.name)] = 0;
+                  valid = probe && appledouble_file_p (probe);
+                  free (probe);
+                  if (valid)
+                    {
+                      style = 2;
+                      break;
+                    }
+                }
+              while (_findnext (search, &entry) == 0);
+              _findclose (search);
+            }
+          free (directory);
+        }
+#else
       directory = sidecar_path (pathname, filename, "");
       if (directory)
         directory[filename - pathname] = 0;
@@ -257,6 +298,7 @@ ROMlib_sidecar_name (const char *pathname, const char *filename)
           closedir (dir);
         }
       free (directory);
+#endif
     }
   return sidecar_path (pathname, filename,
                        style >= 0 ? prefixes[style] : apple_double_fork_prefix);
@@ -593,9 +635,22 @@ A1(PUBLIC, OSErr, ROMlib_seteof, fcbrec *, fp)	/* INTERNAL */
 		  err = ioErr;
 		else
 		  peof = 0x7FFFFFFF;
-	    } else if (leof < peof) {
-		d.length = CL(leof);
-		getsetentry(Set, fd, idwanted, &d, NULL);
+	    } else {
+		struct stat sb;
+		ULONGINT end = CL (d.offset) + leof;
+
+		/* PBAllocate/PBSetEOF precede the copy's first write. Extend
+		   the host file before publishing the larger fork length;
+		   otherwise the next descriptor read rejects its payload. */
+		if (fstat (fd, &sb) < 0
+		    || (end > (ULONGINT) sb.st_size && ftruncate (fd, end) < 0))
+		  err = ROMlib_maperrno ();
+		else
+		  {
+		    d.length = CL (leof);
+		    if (!getsetentry (Set, fd, idwanted, &d, NULL))
+		      err = ioErr;
+		  }
 	    }
 	} else
 	  {

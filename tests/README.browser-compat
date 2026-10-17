@@ -1,0 +1,24 @@
+Run from WSL after rebuilding and staging libsyn68k:
+
+  bash executor/tests/run-browser-compat-tests.sh
+
+The test executes the corrected Greg's Browser 2.7 bookmark scan using the
+real 68K interpreter and a native callback. About, Preferences and Browser
+Docs fixtures must skip the updater; both dialog-kind Browser and document
+fixtures must receive the original window data and selector. The original
+null-refCon guard and C caller's stack must survive the patch. The test also
+checks version matching and repeat application.
+
+Manual Windows verification: launch Apps/Browser, dismiss About, browse
+folders, open Preferences, and use the icon menu after Special. The icon
+title must be drawn as an icon suite, with no handle bytes shown as text.
+Inspect stderr.txt for win_exception and pointer-mapping exhaustion.
+
+List Manager click-loop regression:
+
+  bash executor/tests/run-list-click-tests.sh
+
+This runs the real LClick selection loop with controlled callback results.
+A true result must select the clicked cell and reach mouse-up polling; a
+false result must cancel before selection. A list without a callback must
+also select normally. QuickDraw painting and mouse-up delivery are mocked.

@@ -324,8 +324,9 @@ P3(PUBLIC pascal trap, BOOLEAN, LClick, Point, pt,		/* IMIV-273 */
 	pinrect.bottom = CW(CW(pinrect.bottom) - 1);
 	do {
 	    HxX(list, mouseLoc) = evt.where;
+	    /* A false click-loop result cancels tracking. */
 	    if (HxP(list, lClikLoop))
-		if (CALLCLICK(HxP(list, lClikLoop)))
+		if (!CALLCLICK(HxP(list, lClikLoop)))
 /*-->*/		    break;
 	    p.h = CW(evt.where.h);
 	    p.v = CW(evt.where.v);

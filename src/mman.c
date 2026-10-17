@@ -1845,7 +1845,18 @@ BlockMove_and_possibly_flush_cache (Ptr src, Ptr dst, Size cnt,
 
       memmove_transfer (dst, src, cnt);
       if (flush_p)
-	ROMlib_destroy_blocks ((syn68k_addr_t) US_TO_SYN68K(dst), cnt, TRUE);
+        {
+#if defined (SYN68K)
+          uint32 guest_dst;
+          /* Native filesystem scratch buffers have no translated code.
+             Looking for cached code must not publish those temporary host
+             allocations in the limited Macintosh pointer alias window. */
+          if (syn68k_lookup_guest_address ((ptr_sized_uint) dst, &guest_dst))
+            ROMlib_destroy_blocks (guest_dst, cnt, TRUE);
+#else
+          ROMlib_destroy_blocks ((syn68k_addr_t) US_TO_SYN68K (dst), cnt, TRUE);
+#endif
+        }
     }
 
   /* don't use `SET_MEM_ERR' since that will do a heap slam and we

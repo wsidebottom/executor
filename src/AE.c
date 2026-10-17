@@ -18,13 +18,45 @@ char ROMlib_rcsid_AE[] =
 #include "ProcessMgr.h"
 #include "OSEvent.h"
 #include "OSUtil.h"
+#include "ResourceMgr.h"
+#include "WindowMgr.h"
 #include "ProcessMgr.h"
 #include "AliasMgr.h"
 
 #include "rsys/mman.h"
 #include "rsys/flags.h"
+#include "rsys/executor.h"
+#include "rsys/file.h"
+#include "rsys/browsercompat.h"
+#include "rsys/wind.h"
 
 boolean_t send_application_open_aevt_p;
+
+#if defined (SYN68K)
+static syn68k_addr_t
+gregs_browser_bookmark_window (syn68k_addr_t pc, void *unused)
+{
+  syn68k_addr_t ret = POPADDR ();
+  uint32 address = READUL (EM_A7); /* C argument remains for the caller. */
+  WindowPtr window = address ? (WindowPtr) SYN68K_TO_US (address) : NULL;
+
+  EM_A0 = 0;
+  if (window && (WINDOW_KIND (window) >= userKind
+                 || WINDOW_KIND (window) == dialogKind))
+    {
+      StringHandle title = WINDOW_TITLE (window);
+      if (!title || !STARH (title)
+          || !ROMlib_gregs_browser_bookmark_dialog_p
+               ((unsigned char *) STARH (title)))
+        {
+          SetPort ((GrafPtr) window);
+          EM_A0 = WINDOW_REF_CON (window);
+        }
+    }
+  EM_D0 = EM_A0;
+  return ret;
+}
+#endif
 
 /* dispatching apple events */
 
@@ -107,6 +139,31 @@ P1 (PUBLIC pascal trap, OSErr, AEProcessAppleEvent,
       AE_RETURN_ERROR (err);
     }
   event_id = CL (event_id);
+
+  /* CODE 2 has been relocated by Browser's own segment loader by the
+     time it sends its first bookmark notification. */
+#if defined (SYN68K)
+  if (ROMlib_creator == TICK ("ASIT")
+      && event_class == TICK ("ASIT") && event_id == TICK ("UpdB"))
+    {
+      Handle code = GetResource (TICK ("CODE"), 2);
+      if (code && STARH (code))
+        {
+          static syn68k_addr_t getter;
+          SignedByte state = HGetState (code);
+          if (!getter)
+            getter = callback_install (gregs_browser_bookmark_window, NULL);
+          HLock (code);
+          if (ROMlib_patch_gregs_browser_bookmarks
+              ((unsigned char *) STARH (code), GetHandleSize (code), getter))
+            ROMlib_destroy_blocks
+              (US_TO_SYN68K ((char *) STARH (code)
+                            + GREGS_BROWSER_BOOKMARK_SCAN_OFFSET),
+               GREGS_BROWSER_BOOKMARK_SCAN_SIZE, TRUE);
+          HSetState (code, state);
+        }
+    }
+#endif
   
   err = AEGetEventHandler (event_class, event_id, &hdlr, &refcon, FALSE);
   if (err != noErr)
@@ -672,4 +729,3 @@ P7 (PUBLIC pascal trap, OSErr, AESetObjectCallbacks,
   warning_unimplemented (NULL_STRING);
   return noErr;
 }
-
